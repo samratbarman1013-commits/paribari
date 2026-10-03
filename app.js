@@ -70,7 +70,7 @@ function start(){
       const { data: { session } } = await sb.auth.getSession();
       if (session) await afterLogin();
       else showAuth();
-    }catch(e){ console.error(e); showAuth(); }
+    }catch(e){ console.error(e); }
   })();
 }
 
@@ -324,6 +324,7 @@ async function openComments(postId){
 
 /* ============================= EXPLORE ================================ */
 async function loadExplore(){
+  loadSuggestions();
   $('#exploreGrid').innerHTML = '<div class="spin"></div>';
   const { data, error } = await sb.from('posts')
     .select('id,image_url,user_id, likes(user_id), comments(id)')
@@ -339,20 +340,359 @@ async function loadExplore(){
   $$('#exploreGrid .cell').forEach(c => c.onclick = () => openUserModal(c.dataset.uid));
 }
 
-/* ============================== STORIES =============================== */
-async function loadStories(){
-  const { data } = await sb.from('profiles').select('id,username,name,avatar_url').limit(20);
-  const people = (data||[]).filter(p => p.id !== me.id).slice(0, 14);
-  const cells = [`<div class="story" data-me="1">
-      <div class="ring"><img src="${avatarOf(me)}" alt=""></div><small>Your story</small></div>`]
-    .concat(people.map(p => `<div class="story" data-uid="${p.id}">
-      <div class="ring"><img src="${avatarOf(p)}" alt=""></div><small>${esc(p.username)}</small></div>`));
-  $('#stories').innerHTML = cells.join('');
-  $$('#stories .story').forEach(el => el.onclick = () => {
-    if (el.dataset.me) openCreate();
-    else openUserModal(el.dataset.uid);
+/* ========================== WHO TO FOLLOW ============================ */
+async function loadSuggestions(){
+  const el = $('#followSuggest');
+  const { data } = await sb.from('profiles').select('id,username,name,avatar_url').limit(40);
+  const people = (data || []).filter(p => p.id !== me.id && !myFollowing.has(p.id)).slice(0, 12);
+  if (!people.length){ el.innerHTML = ''; return; }
+  el.innerHTML = `<div class="suggest"><h4>Who to follow</h4><div class="suggest-row">${
+    people.map(p => `<div class="sug" data-uid="${p.id}">
+      ${avatarImg(p)}
+      <div class="u">${esc(p.username)}</div>
+      <div class="n">${esc(p.name || '')}</div>
+      <button class="btn primary" data-act="follow" data-uid="${p.id}">Follow</button>
+    </div>`).join('')}</div></div>`;
+  $$('#followSuggest [data-act="follow"]').forEach(b => b.onclick = async (e) => {
+    e.stopPropagation();
+    const uid = b.dataset.uid;
+    if (myFollowing.has(uid)) return;
+    await sb.from('follows').insert({ follower_id: me.id, following_id: uid });
+    myFollowing.add(uid);
+    b.textContent = 'Following'; b.classList.remove('primary');
+    await notify(uid, 'follow', null);
+    toast('Following');
+  });
+  $$('#followSuggest .sug').forEach(s => s.onclick = (e) => {
+    if (!e.target.closest('button')) openUserModal(s.dataset.uid);
   });
 }
+
+/* ===================== FOLLOWERS / FOLLOWING ========================= */
+async function openFollowList(kind, userId){
+  const uid = userId || me.id;
+  $('#followTitle').textContent = kind === 'followers' ? 'Followers' : 'Following';
+  const body = $('#followBody');
+  body.innerHTML = '<div class="spin"></div>';
+  $('#followModal').classList.add('on');
+  let ids = [];
+  if (kind === 'followers'){
+    const { data } = await sb.from('follows').select('follower_id').eq('following_id', uid);
+    ids = (data || []).map(r => r.follower_id);
+  } else {
+    const { data } = await sb.from('follows').select('following_id').eq('follower_id', uid);
+    ids = (data || []).map(r => r.following_id);
+  }
+  if (!ids.length){ body.innerHTML = '<div class="empty">Nobody here yet.</div>'; return; }
+  const { data: profs } = await sb.from('profiles').select('id,username,name,avatar_url').in('id', ids);
+  body.innerHTML = (profs || []).map(p => `<div class="person" data-uid="${p.id}" style="cursor:pointer">
+      ${avatarImg(p)}
+      <div class="meta"><div class="h">${esc(p.username)}</div><div class="s">${esc(p.name || '')}</div></div>
+      ${p.id !== me.id ? `<button class="btn ${myFollowing.has(p.id) ? '' : 'primary'}" data-act="f" data-uid="${p.id}">${myFollowing.has(p.id) ? 'Following' : 'Follow'}</button>` : ''}
+    </div>`).join('');
+  $$('#followBody .person').forEach(el => el.onclick = (e) => {
+    if (!e.target.closest('button')) openUserModal(el.dataset.uid);
+  });
+  $$('#followBody [data-act="f"]').forEach(b => b.onclick = async (e) => {
+    e.stopPropagation();
+    const id = b.dataset.uid;
+    if (myFollowing.has(id)){
+      await sb.from('follows').delete().eq('follower_id', me.id).eq('following_id', id);
+      myFollowing.delete(id);
+      b.textContent = 'Follow'; b.classList.add('primary');
+    } else {
+      await sb.from('follows').insert({ follower_id: me.id, following_id: id });
+      myFollowing.add(id);
+      b.textContent = 'Following'; b.classList.remove('primary');
+      await notify(id, 'follow', null);
+    }
+  });
+}
+$$('[data-follow]').forEach(el => el.onclick = () => openFollowList(el.dataset.follow));
+
+/* =============================== REELS =============================== */
+let reels = [], reelObserver = null;
+
+async function loadReels(){
+  const feed = $('#reelsFeed');
+  feed.innerHTML = '<div class="spin"></div>';
+  const { data, error } = await sb.from('reels')
+    .select('id,user_id,video_url,caption,created_at, author:profiles(username,name,avatar_url), reel_likes(user_id), reel_comments(id)')
+    .order('created_at', { ascending: false }).limit(30);
+  if (error){ feed.innerHTML = `<div class="empty">${esc(error.message)}</div>`; return; }
+  reels = (data || []).map(r => ({
+    ...r,
+    likeCount: (r.reel_likes || []).length,
+    liked: (r.reel_likes || []).some(l => l.user_id === me.id),
+    commentCount: (r.reel_comments || []).length
+  }));
+  renderReels();
+}
+
+function renderReels(){
+  const feed = $('#reelsFeed');
+  if (!reels.length){
+    feed.innerHTML = '<div class="empty">No reels yet.<br>Tap <b>New reel</b> to post the first one.</div>';
+    return;
+  }
+  feed.innerHTML = reels.map((r, i) => {
+    const a = r.author || {};
+    return `<div class="reel paused" data-i="${i}">
+      <video src="${esc(r.video_url)}" loop playsinline preload="metadata" muted></video>
+      <div class="rv-play">${svgPlay()}</div>
+      <div class="rv-head">${avatarImg(a)}<div class="u">${esc(a.username || 'user')}</div></div>
+      <div class="rv-side">
+        <button data-act="like" class="${r.liked ? 'liked' : ''}">${svgHeart(r.liked)}<span data-role="lc">${fmt(r.likeCount)}</span></button>
+        <button data-act="comment">${svgComment()}<span data-role="cc">${r.commentCount}</span></button>
+      </div>
+      ${r.caption ? `<div class="rv-cap"><b>${esc(a.username || 'user')}</b>${esc(r.caption)}</div>` : ''}
+    </div>`;
+  }).join('');
+  wireReels();
+}
+
+function wireReels(){
+  const els = $$('#reelsFeed .reel');
+  els.forEach(el => {
+    const r = reels[+el.dataset.i];
+    const v = el.querySelector('video');
+    el.onclick = (e) => {
+      if (e.target.closest('[data-act]')) return;
+      if (v.paused){ v.play().catch(() => {}); el.classList.remove('paused'); }
+      else { v.pause(); el.classList.add('paused'); }
+    };
+    el.querySelector('[data-act="like"]').onclick = async (e) => {
+      e.stopPropagation();
+      const on = !r.liked;
+      r.liked = on; r.likeCount += on ? 1 : -1;
+      const b = el.querySelector('[data-act="like"]');
+      b.classList.toggle('liked', on);
+      b.innerHTML = svgHeart(on) + `<span data-role="lc">${fmt(r.likeCount)}</span>`;
+      if (on){
+        await sb.from('reel_likes').insert({ reel_id: r.id, user_id: me.id });
+        if (r.user_id !== me.id) await notify(r.user_id, 'like', null);
+      } else {
+        await sb.from('reel_likes').delete().eq('reel_id', r.id).eq('user_id', me.id);
+      }
+    };
+    el.querySelector('[data-act="comment"]').onclick = (e) => { e.stopPropagation(); openReelComments(r.id); };
+  });
+  if (reelObserver) reelObserver.disconnect();
+  reelObserver = new IntersectionObserver((entries) => {
+    entries.forEach(en => {
+      const v = en.target.querySelector('video');
+      if (en.isIntersecting && en.intersectionRatio > 0.6){
+        v.play().then(() => en.target.classList.remove('paused')).catch(() => {});
+      } else {
+        v.pause(); en.target.classList.add('paused');
+      }
+    });
+  }, { threshold: [0, 0.6, 1] });
+  els.forEach(el => reelObserver.observe(el));
+}
+
+async function openReelComments(reelId){
+  const body = $('#cModalBody');
+  body.innerHTML = '<div class="spin"></div>';
+  $('#cModal').classList.add('on');
+  const { data, error } = await sb.from('reel_comments')
+    .select('id,body,created_at,user_id, author:profiles(username,name,avatar_url)')
+    .eq('reel_id', reelId).order('created_at', { ascending: true });
+  if (error){ body.innerHTML = `<div class="empty">${esc(error.message)}</div>`; return; }
+  const listHTML = (rows) => rows.length
+    ? rows.map(c => `<div class="row" style="padding:7px 0;align-items:flex-start;gap:10px">
+        ${avatarImg(c.author)}
+        <div style="flex:1"><b style="font-size:13.5px">${esc((c.author||{}).username||'user')}</b>
+        <span style="font-size:13.5px">${esc(c.body)}</span>
+        <div class="muted" style="font-size:11px">${esc(timeAgo(c.created_at))}</div></div>
+      </div>`).join('')
+    : '<div class="empty">No comments yet. Be the first!</div>';
+  body.innerHTML = `<div style="max-height:44vh;overflow:auto">${listHTML(data||[])}</div>
+    <div class="cbar" style="border:1px solid var(--border);border-radius:12px;margin-top:12px">
+      <input id="rcInput" placeholder="Add a comment...">
+      <button id="rcPost" class="on">Post</button>
+    </div>`;
+  const add = async () => {
+    const v = $('#rcInput').value.trim(); if (!v) return;
+    const { error: e2 } = await sb.from('reel_comments').insert({ reel_id: reelId, user_id: me.id, body: v });
+    if (e2) return toast(e2.message);
+    $('#rcInput').value = '';
+    const r = reels.find(x => x.id === reelId);
+    if (r){ r.commentCount++; const c = document.querySelector('#reelsFeed .reel[data-i="' + reels.indexOf(r) + '"] [data-role="cc"]'); if (c) c.textContent = r.commentCount; }
+    const { data: rows } = await sb.from('reel_comments')
+      .select('id,body,created_at,user_id, author:profiles(username,name,avatar_url)')
+      .eq('reel_id', reelId).order('created_at', { ascending: true });
+    body.querySelector('div').innerHTML = listHTML(rows || []);
+    toast('Comment added');
+  };
+  $('#rcPost').onclick = add;
+  $('#rcInput').addEventListener('keydown', e => { if (e.key === 'Enter') add(); });
+}
+
+/* ---- reel composer ---- */
+let reelBlob = null;
+$('#newReelBtn').onclick = () => { errEl('#reelErr',''); $('#reelModal').classList.add('on'); };
+$('#reelDrop').onclick = () => $('#reelInput').click();
+$('#reelInput').onchange = (e) => { const f = e.target.files[0]; if (f) reelBlob = f; };
+$('#reelShare').onclick = async () => {
+  errEl('#reelErr','');
+  if (!reelBlob) return errEl('#reelErr','Please choose a video first.');
+  const btn = $('#reelShare'); btn.disabled = true; btn.textContent = 'Uploading...';
+  try{
+    const path = `${me.id}/${Date.now()}.mp4`;
+    const { error: ue } = await sb.storage.from('reels').upload(path, reelBlob, { contentType: reelBlob.type || 'video/mp4' });
+    if (ue) throw ue;
+    const { data: { publicUrl } } = sb.storage.from('reels').getPublicUrl(path);
+    const { error } = await sb.from('reels').insert({ user_id: me.id, video_url: publicUrl, caption: $('#reelCaption').value.trim() });
+    if (error) throw error;
+    reelBlob = null; $('#reelCaption').value = '';
+    closeAllModals(); await loadReels(); toast('Reel posted');
+  }catch(err){ errEl('#reelErr', err.message); }
+  btn.disabled = false; btn.textContent = 'Share reel';
+};
+
+/* ============================== STORIES =============================== */
+let storyGroups = [];                 // [{ profile, stories:[...] }]
+let svGroup = 0, svIndex = 0, svTimer = null;
+
+async function loadStories(){
+  const { data, error } = await sb.from('stories')
+    .select('id,user_id,media_url,media_type,caption,created_at,expires_at, author:profiles(username,name,avatar_url)')
+    .gt('expires_at', new Date().toISOString())
+    .order('created_at', { ascending: true });
+  const rows = error ? [] : (data || []);
+
+  const byUser = new Map();
+  rows.forEach(s => {
+    if (!byUser.has(s.user_id)) byUser.set(s.user_id, { profile: s.author || { username: 'user' }, stories: [] });
+    byUser.get(s.user_id).stories.push(s);
+  });
+  storyGroups = [];
+  if (byUser.has(me.id)){ storyGroups.push(byUser.get(me.id)); byUser.delete(me.id); }
+  byUser.forEach(g => storyGroups.push(g));
+
+  let seen = new Set();
+  const { data: views } = await sb.from('story_views').select('story_id').eq('viewer_id', me.id);
+  (views || []).forEach(v => seen.add(v.story_id));
+
+  const bar = [`<div class="story" data-me="1">
+      <div class="ring"><img src="${avatarOf(me)}" alt=""></div><small>Your story</small></div>`];
+  storyGroups.forEach((g, i) => {
+    if (g.profile.id === me.id) return;
+    const allSeen = g.stories.every(s => seen.has(s.id));
+    bar.push(`<div class="story" data-g="${i}">
+      <div class="ring ${allSeen ? 'seen' : ''}"><img src="${avatarOf(g.profile)}" alt=""></div>
+      <small>${esc(g.profile.username || 'user')}</small></div>`);
+  });
+  $('#stories').innerHTML = bar.join('');
+  $$('#stories .story').forEach(el => el.onclick = () => {
+    if (el.dataset.me){
+      const mine = storyGroups.findIndex(g => g.profile.id === me.id);
+      if (mine >= 0) openStoryViewer(mine, 0); else openStoryComposer();
+      return;
+    }
+    openStoryViewer(+el.dataset.g, 0);
+  });
+}
+
+function openStoryViewer(gi, si){
+  svGroup = gi; svIndex = si;
+  $('#storyViewer').classList.remove('hidden');
+  renderStory();
+}
+
+function renderStory(){
+  const g = storyGroups[svGroup];
+  if (!g) return closeStoryViewer();
+  const s = g.stories[svIndex];
+  if (!s) return closeStoryViewer();
+  const mine = g.profile.id === me.id;
+
+  $('#svAvatar').src = avatarOf(g.profile);
+  $('#svName').textContent = g.profile.username || 'user';
+  $('#svTime').textContent = timeAgo(s.created_at);
+
+  $('#svStage').innerHTML = s.media_type === 'video'
+    ? `<video src="${esc(s.media_url)}" autoplay playsinline></video>`
+    : `<img src="${esc(s.media_url)}" alt="">`;
+
+  $('#svCaption').innerHTML = esc(s.caption || '') +
+    (mine ? `<div style="margin-top:12px"><button class="btn" id="svDelete">Delete story</button></div>` : '');
+  if (mine){
+    const del = $('#svDelete');
+    if (del) del.onclick = async () => {
+      await sb.from('stories').delete().eq('id', s.id);
+      closeStoryViewer(); toast('Story deleted');
+    };
+  }
+
+  $('#svBars').innerHTML = g.stories.map((_, i) =>
+    `<i class="${i < svIndex ? 'done' : ''} ${i === svIndex ? 'active' : ''}"><span></span></i>`).join('');
+
+  sb.from('story_views').upsert({ story_id: s.id, viewer_id: me.id }).then(() => {});
+
+  clearTimeout(svTimer);
+  svTimer = setTimeout(storyNext, s.media_type === 'video' ? 8000 : 5000);
+}
+
+function storyNext(){
+  const g = storyGroups[svGroup];
+  if (!g) return closeStoryViewer();
+  if (svIndex < g.stories.length - 1){ svIndex++; renderStory(); }
+  else if (svGroup < storyGroups.length - 1){ svGroup++; svIndex = 0; renderStory(); }
+  else closeStoryViewer();
+}
+function storyPrev(){
+  if (svIndex > 0){ svIndex--; renderStory(); }
+  else if (svGroup > 0){ svGroup--; svIndex = storyGroups[svGroup].stories.length - 1; renderStory(); }
+  else renderStory();
+}
+function closeStoryViewer(){
+  clearTimeout(svTimer);
+  $('#storyViewer').classList.add('hidden');
+  $('#svStage').innerHTML = '';
+  loadStories();
+}
+$('#svClose').onclick = closeStoryViewer;
+$('#svNext').onclick = storyNext;
+$('#svPrev').onclick = storyPrev;
+
+/* ---- story composer ---- */
+let storyBlob = null, storyKind = 'image';
+function openStoryComposer(){
+  errEl('#storyErr',''); storyBlob = null;
+  $('#storyPreview').classList.add('hidden'); $('#storyPreview').innerHTML = '';
+  $('#storyModal').classList.add('on');
+}
+$('#storyDrop').onclick = () => $('#storyInput').click();
+$('#storyInput').onchange = (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  storyBlob = f; storyKind = (f.type || '').startsWith('video') ? 'video' : 'image';
+  const url = URL.createObjectURL(f);
+  $('#storyPreview').innerHTML = storyKind === 'video'
+    ? `<video src="${url}" autoplay muted loop playsinline></video>`
+    : `<img src="${url}" alt="">`;
+  $('#storyPreview').classList.remove('hidden');
+};
+$('#storyShare').onclick = async () => {
+  errEl('#storyErr','');
+  if (!storyBlob) return errEl('#storyErr','Please choose a photo or video first.');
+  const btn = $('#storyShare'); btn.disabled = true; btn.textContent = 'Uploading...';
+  try{
+    const path = `${me.id}/${Date.now()}.${storyKind === 'video' ? 'mp4' : 'jpg'}`;
+    const { error: ue } = await sb.storage.from('stories').upload(path, storyBlob, { contentType: storyBlob.type || 'image/jpeg' });
+    if (ue) throw ue;
+    const { data: { publicUrl } } = sb.storage.from('stories').getPublicUrl(path);
+    const { error } = await sb.from('stories').insert({
+      user_id: me.id, media_url: publicUrl, media_type: storyKind, caption: $('#storyCaption').value.trim()
+    });
+    if (error) throw error;
+    storyBlob = null; $('#storyCaption').value = '';
+    $('#storyPreview').classList.add('hidden'); $('#storyPreview').innerHTML = '';
+    closeAllModals(); await loadStories(); toast('Added to your story');
+  }catch(err){ errEl('#storyErr', err.message); }
+  btn.disabled = false; btn.textContent = 'Share to story';
+};
 
 /* ============================ CREATE POST ============================= */
 let pendingBlob = null, camStream = null;
@@ -438,8 +778,8 @@ async function openUserModal(uid){
     </div>
     <div class="stats" style="margin-top:14px">
       <div><b>${(posts||[]).length}</b> posts</div>
-      <div><b>${fmt((fCount||[]).length)}</b> followers</div>
-      <div><b>${fmt((fwCount||[]).length)}</b> following</div>
+      <div data-fl="followers" data-uid="${uid}" style="cursor:pointer"><b>${fmt((fCount||[]).length)}</b> followers</div>
+      <div data-fl="following" data-uid="${uid}" style="cursor:pointer"><b>${fmt((fwCount||[]).length)}</b> following</div>
     </div>
     ${p.bio ? `<div class="bio" style="margin:8px 0 14px">${esc(p.bio)}</div>` : ''}
     <div class="row" style="gap:8px">
@@ -464,6 +804,9 @@ async function openUserModal(uid){
     }
   };
   $('#msgBtn').onclick = () => { closeAllModals(); openChat(uid); };
+  $$('#userModalBody [data-fl]').forEach(el => el.onclick = (e) => {
+    e.stopPropagation(); openFollowList(el.dataset.fl, el.dataset.uid);
+  });
 }
 
 /* ================================ DMs ================================= */
@@ -475,13 +818,15 @@ async function loadDMs(){
   $('#dmChat').classList.add('hidden'); $('#dmList').classList.remove('hidden');
   $('#dmList').innerHTML = '<div class="spin"></div>';
   const { data: msgs } = await sb.from('messages')
-    .select('sender_id,receiver_id,body,created_at')
+    .select('sender_id,receiver_id,body,created_at,read_at,media_url')
     .or(`sender_id.eq.${me.id},receiver_id.eq.${me.id}`)
     .order('created_at', { ascending: false }).limit(300);
   const seen = new Map();
+  const unread = new Map();
   (msgs||[]).forEach(m => {
     const other = m.sender_id === me.id ? m.receiver_id : m.sender_id;
     if (!seen.has(other)) seen.set(other, m);
+    if (m.receiver_id === me.id && !m.read_at) unread.set(other, (unread.get(other) || 0) + 1);
   });
   const ids = [...seen.keys()];
   let profMap = {};
@@ -489,7 +834,7 @@ async function loadDMs(){
     const { data: profs } = await sb.from('profiles').select('id,username,name,avatar_url').in('id', ids);
     (profs||[]).forEach(p => profMap[p.id] = p);
   }
-  dmPeople = ids.map(id => ({ profile: profMap[id] || {id, username:'user'}, last: seen.get(id) }));
+  dmPeople = ids.map(id => ({ profile: profMap[id] || {id, username:'user'}, last: seen.get(id), unread: unread.get(id) || 0 }));
   const listEl = $('#dmList');
   if (!dmPeople.length){
     listEl.innerHTML = '<div class="empty">No conversations yet.<br>Open someone\'s profile and tap <b>Message</b> to start one.</div>';
@@ -498,7 +843,8 @@ async function loadDMs(){
   listEl.innerHTML = dmPeople.map((d,i) => `<div class="person" data-i="${i}" style="cursor:pointer">
       ${avatarImg(d.profile)}
       <div class="meta"><div class="h">${esc(d.profile.username)}</div>
-      <div class="s">${esc(d.last.body)}</div></div>
+      <div class="s">${esc(d.last.body || (d.last.media_url ? 'Photo' : ''))}</div></div>
+      ${d.unread ? `<span style="min-width:18px;height:18px;border-radius:9px;background:var(--heart);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 5px">${d.unread}</span>` : ''}
       <div class="when muted" style="font-size:11.5px">${esc(timeAgo(d.last.created_at))}</div>
     </div>`).join('');
   $$('#dmList .person').forEach(el => el.onclick = () => openChat(dmPeople[+el.dataset.i].profile.id));
@@ -506,7 +852,6 @@ async function loadDMs(){
 
 async function openChat(uid){
   chatPeer = uid;
-  markDMsSeen(); refreshBadges();
   $('#dmList').classList.add('hidden'); $('#dmChat').classList.remove('hidden');
   const { data: p } = await sb.from('profiles').select('id,username,name,avatar_url').eq('id', uid).maybeSingle();
   chatPeerProfile = p || { id: uid, username:'user' };
@@ -519,29 +864,45 @@ async function openChat(uid){
       </div>
       <div class="chatbody" id="chatBody"></div>
       <div class="chatinput">
+        <button class="ibtn" id="chatPhoto" title="Send a photo">${svgImage()}</button>
         <input id="chatMsg" placeholder="Message...">
         <button class="btn primary" id="chatSend">Send</button>
       </div>
+      <input type="file" id="chatFile" accept="image/*" hidden />
     </div>`;
   $('#chatBack').onclick = () => { chatPeer = null; closeChatChannel(); loadDMs(); };
+  await markChatRead();
   await renderChat();
   $('#chatSend').onclick = sendChat;
   $('#chatMsg').addEventListener('keydown', e => { if (e.key === 'Enter') sendChat(); });
+  $('#chatPhoto').onclick = () => $('#chatFile').click();
+  $('#chatFile').onchange = sendChatPhoto;
   openChatChannel();
+}
+
+async function markChatRead(){
+  if (!chatPeer) return;
+  await sb.from('messages').update({ read_at: new Date().toISOString() })
+    .eq('sender_id', chatPeer).eq('receiver_id', me.id).is('read_at', null);
+  refreshBadges();
 }
 let chatPeerProfile = null;
 
 async function renderChat(){
   const { data, error } = await sb.from('messages')
-    .select('id,sender_id,receiver_id,body,created_at')
+    .select('id,sender_id,receiver_id,body,created_at,read_at,media_url,media_type')
     .or(`and(sender_id.eq.${me.id},receiver_id.eq.${chatPeer}),and(sender_id.eq.${chatPeer},receiver_id.eq.${me.id})`)
     .order('created_at', { ascending: true }).limit(500);
   const body = $('#chatBody');
   if (!body) return;
   if (error){ body.innerHTML = `<div class="empty">${esc(error.message)}</div>`; return; }
-  body.innerHTML = (data||[]).map(m =>
-    `<div class="bub ${m.sender_id===me.id?'me':'them'}">${esc(m.body)}</div>`).join('')
-    || '<div class="empty">Say hi 👋</div>';
+  body.innerHTML = (data||[]).map(m => {
+    const mine = m.sender_id === me.id;
+    const media = m.media_url ? `<img class="media" src="${esc(m.media_url)}" alt="">` : '';
+    const ticks = mine ? `<span class="ticks ${m.read_at ? 'seen' : ''}">${m.read_at ? '✓✓' : '✓'}</span>` : '';
+    const txt = m.body ? esc(m.body) : '';
+    return `<div class="bub ${mine?'me':'them'}">${media}${txt}${ticks}</div>`;
+  }).join('') || '<div class="empty">Say hi 👋</div>';
   body.scrollTop = body.scrollHeight;
 }
 
@@ -549,6 +910,22 @@ async function sendChat(){
   const inp = $('#chatMsg'); const v = inp.value.trim(); if (!v) return;
   inp.value = '';
   const { error } = await sb.from('messages').insert({ sender_id: me.id, receiver_id: chatPeer, body: v });
+  if (error) return toast(error.message);
+  await notify(chatPeer, 'message', null);
+  await renderChat();
+}
+
+async function sendChatPhoto(e){
+  const f = e.target.files[0]; if (!f) return;
+  e.target.value = '';
+  toast('Uploading photo...');
+  const path = `${me.id}/${Date.now()}.jpg`;
+  const { error: ue } = await sb.storage.from('chat').upload(path, f, { contentType: f.type || 'image/jpeg' });
+  if (ue) return toast(ue.message);
+  const { data: { publicUrl } } = sb.storage.from('chat').getPublicUrl(path);
+  const { error } = await sb.from('messages').insert({
+    sender_id: me.id, receiver_id: chatPeer, body: '', media_url: publicUrl, media_type: 'image'
+  });
   if (error) return toast(error.message);
   await notify(chatPeer, 'message', null);
   await renderChat();
@@ -593,14 +970,10 @@ async function loadNotifs(){
   refreshBadges();
 }
 
-function dmSeenAt(){ return Number(localStorage.getItem('paribari_dm_seen') || 0); }
-function markDMsSeen(){ localStorage.setItem('paribari_dm_seen', String(Date.now())); }
-
 async function refreshBadges(){
   const [{ count: nCount }, { count: mCount }] = await Promise.all([
     sb.from('notifications').select('*', { count:'exact', head:true }).eq('user_id', me.id).eq('read', false),
-    sb.from('messages').select('*', { count:'exact', head:true })
-      .eq('receiver_id', me.id).gt('created_at', new Date(dmSeenAt()).toISOString())
+    sb.from('messages').select('*', { count:'exact', head:true }).eq('receiver_id', me.id).is('read_at', null)
   ]);
   const nb = $('#notifBadge'), db = $('#dmBadge');
   if (nCount){ nb.textContent = fmt(nCount); nb.classList.remove('hidden'); } else nb.classList.add('hidden');
@@ -706,9 +1079,11 @@ function go(v){
   window.scrollTo({ top:0, behavior:'smooth' });
   if (v === 'explore') loadExplore();
   if (v === 'profile') loadProfile();
-  if (v === 'dms'){ markDMsSeen(); loadDMs(); refreshBadges(); }
+  if (v === 'reels') loadReels();
+  if (v === 'dms'){ loadDMs(); refreshBadges(); }
   if (v === 'notifs') loadNotifs();
   if (v !== 'dms'){ chatPeer = null; closeChatChannel(); }
+  if (v !== 'reels'){ $$('#reelsFeed video').forEach(x => x.pause()); }
 }
 $$('[data-go]').forEach(b => b.onclick = () => go(b.dataset.go));
 
@@ -729,6 +1104,13 @@ function subscribeRealtime(){
       if (currentView === 'home') loadFeed();
       if (currentView === 'explore') loadExplore();
     })
+    .on('postgres_changes', { event:'UPDATE', schema:'public', table:'messages', filter:`sender_id=eq.${me.id}` }, () => {
+      if (chatPeer) renderChat();
+    })
+    .on('postgres_changes', { event:'INSERT', schema:'public', table:'stories' }, () => { loadStories(); })
+    .on('postgres_changes', { event:'INSERT', schema:'public', table:'reels' }, () => {
+      if (currentView === 'reels') loadReels();
+    })
     .subscribe();
 }
 
@@ -738,6 +1120,8 @@ function svgComment(){ return `<svg width="24" height="24" viewBox="0 0 24 24" f
 function svgShare(){ return `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7Z"/></svg>`; }
 function svgSave(f){ return `<svg width="24" height="24" viewBox="0 0 24 24" fill="${f?'currentColor':'none'}" stroke="currentColor" stroke-width="1.9"><path d="M19 21 12 16l-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2Z"/></svg>`; }
 function svgBigHeart(){ return `<svg width="96" height="96" viewBox="0 0 24 24" fill="#fff"><path d="M12 21s-7.5-4.7-9.6-9.2C.9 8.4 2.7 5 6.2 5c2 0 3.3 1.1 4 2.2.6-1.1 2-2.2 4-2.2 3.5 0 5.3 3.4 3.8 6.8C19.5 16.3 12 21 12 21Z"/></svg>`; }
+function svgPlay(){ return `<svg width="68" height="68" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`; }
+function svgImage(){ return `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>`; }
 
 /* ============================== PWA =================================== */
 let deferredPrompt = null;
