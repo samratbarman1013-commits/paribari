@@ -62,58 +62,67 @@ function start(){
   sb = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, {
     auth: { persistSession: true, autoRefreshToken: true }
   });
-  sb.auth.onAuthStateChange((evt) => {
+  sb.auth.onAuthStateChange((evt, session) => {
     if (evt === 'SIGNED_OUT'){ me = null; showAuth(); }
+    else if ((evt === 'SIGNED_IN' || evt === 'INITIAL_SESSION') && session){ afterLogin(); }
   });
-  (async () => {
-    try{
-      const { data: { session } } = await sb.auth.getSession();
-      if (session) await afterLogin();
-      else showAuth();
-    }catch(e){ console.error(e); showAuth(); }
-  })();
+  afterLogin().catch(e => { console.error(e); showAuth(); });
 }
 
 /* =============================== AUTH ================================= */
 function showAuth(){ $('#auth').classList.remove('hidden'); $('#app').classList.add('hidden'); }
 function showApp(){ $('#auth').classList.add('hidden'); $('#app').classList.remove('hidden'); }
 
-$('#tabIn').onclick = ()=>{ $('#tabIn').classList.add('on'); $('#tabUp').classList.remove('on');
-  $('#formIn').classList.remove('hidden'); $('#formUp').classList.add('hidden'); errEl('#authErr',''); errEl('#authOk',''); };
-$('#tabUp').onclick = ()=>{ $('#tabUp').classList.add('on'); $('#tabIn').classList.remove('on');
-  $('#formUp').classList.remove('hidden'); $('#formIn').classList.add('hidden'); errEl('#authErr',''); errEl('#authOk',''); };
+$('#tabEmail').onclick = ()=>{ $('#tabEmail').classList.add('on'); $('#tabGuest').classList.remove('on');
+  $('#formEmail').classList.remove('hidden'); $('#guestPane').classList.add('hidden'); errEl('#authErr',''); errEl('#authOk',''); };
+$('#tabGuest').onclick = ()=>{ $('#tabGuest').classList.add('on'); $('#tabEmail').classList.remove('on');
+  $('#guestPane').classList.remove('hidden'); $('#formEmail').classList.add('hidden'); errEl('#authErr',''); errEl('#authOk',''); };
 
-$('#formIn').onsubmit = async (e) => {
+/* Passwordless: email a one-time login link */
+$('#formEmail').onsubmit = async (e) => {
   e.preventDefault(); errEl('#authErr',''); errEl('#authOk','');
-  const email = $('#inEmail').value.trim(), pass = $('#inPass').value;
-  const btn = e.target.querySelector('button'); btn.disabled = true; btn.textContent = 'Signing in...';
-  const { error } = await sb.auth.signInWithPassword({ email, password: pass });
-  btn.disabled = false; btn.textContent = 'Sign in';
-  if (error) errEl('#authErr', error.message);
-  else await afterLogin();
-};
-
-$('#formUp').onsubmit = async (e) => {
-  e.preventDefault(); errEl('#authErr',''); errEl('#authOk','');
-  const name = $('#upName').value.trim();
-  const username = $('#upUser').value.trim().toLowerCase().replace(/[^a-z0-9_]/g,'');
-  const email = $('#upEmail').value.trim(), pass = $('#upPass').value;
+  const name = $('#emName').value.trim();
+  const username = $('#emUser').value.trim().toLowerCase().replace(/[^a-z0-9_]/g,'');
+  const email = $('#emEmail').value.trim();
   if (!username) return errEl('#authErr','Please choose a username (letters, numbers, underscore).');
-  const btn = e.target.querySelector('button'); btn.disabled = true; btn.textContent = 'Creating...';
-  const { data, error } = await sb.auth.signUp({
-    email, password: pass,
-    options: { data: { username, name } }
+  const btn = e.target.querySelector('button'); btn.disabled = true; btn.textContent = 'Sending...';
+  const { error } = await sb.auth.signInWithOtp({
+    email,
+    options: {
+      shouldCreateUser: true,
+      data: { username, name },
+      emailRedirectTo: location.origin + location.pathname
+    }
   });
-  btn.disabled = false; btn.textContent = 'Create account';
+  btn.disabled = false; btn.textContent = 'Email me a login link';
   if (error) return errEl('#authErr', error.message);
-  if (data.session) { await afterLogin(); }
-  else errEl('#authOk','Account created! Check your email to confirm, then sign in.');
+  errEl('#authOk', 'Link sent! Open your email on this device and tap the link — you will be signed in automatically.');
 };
 
+/* Passwordless: instant guest account, no email at all */
+$('#guestBtn').onclick = async () => {
+  errEl('#authErr',''); errEl('#authOk','');
+  const name = $('#gName').value.trim() || 'Guest';
+  let username = $('#gUser').value.trim().toLowerCase().replace(/[^a-z0-9_]/g,'');
+  if (!username) username = 'guest' + Math.floor(1000 + Math.random()*9000);
+  const btn = $('#guestBtn'); btn.disabled = true; btn.textContent = 'Signing in...';
+  const { error } = await sb.auth.signInAnonymously({ options: { data: { username, name } } });
+  btn.disabled = false; btn.textContent = 'Continue as guest';
+  if (error) return errEl('#authErr', error.message);
+  await afterLogin();
+};
+
+let entering = false;
 async function afterLogin(){
-  await loadMe();
-  if (me){ showApp(); await boot(); }
-  else { errEl('#authErr','Signed in, but your profile row is missing. Did you run supabase-schema.sql?'); }
+  if (entering) return;
+  entering = true;
+  try{
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session){ me = null; showAuth(); return; }
+    await loadMe();
+    if (me){ showApp(); await boot(); }
+    else { showAuth(); errEl('#authErr','Signed in, but your profile row is missing. Did you run supabase-schema.sql?'); }
+  } finally { entering = false; }
 }
 
 async function loadMe(){
