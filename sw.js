@@ -1,6 +1,6 @@
 /* PariBari service worker — offline shell for the static assets only.
    Data always comes live from Supabase, so API calls are never cached. */
-const CACHE = 'paribari-v7';
+const CACHE = 'paribari-v8';
 const ASSETS = [
   './', './index.html', './styles.css', './app.js', './config.js', './supabase.js',
   './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'
