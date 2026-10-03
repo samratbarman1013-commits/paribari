@@ -100,7 +100,15 @@
       </div>
     </section>
 
-    <section class="view" id="view-explore"><div class="grid" id="exploreGrid"></div></section>
+    <section class="view" id="view-explore">
+      <div id="followSuggest"></div>
+      <div class="grid" id="exploreGrid"></div>
+    </section>
+
+    <section class="view" id="view-reels">
+      <div class="reels-top"><b>Reels</b><button class="btn" id="newReelBtn">New reel</button></div>
+      <div id="reelsFeed"></div>
+    </section>
 
     <section class="view" id="view-dms">
       <div id="dmList"></div>
@@ -116,8 +124,8 @@
           <h2 id="profName"></h2>
           <div class="stats">
             <div><b id="statPosts">0</b> posts</div>
-            <div><b id="statFollowers">0</b> followers</div>
-            <div><b id="statFollowing">0</b> following</div>
+            <div data-follow="followers" style="cursor:pointer"><b id="statFollowers">0</b> followers</div>
+            <div data-follow="following" style="cursor:pointer"><b id="statFollowing">0</b> following</div>
           </div>
           <div class="bio" id="profBio"></div>
           <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
@@ -144,8 +152,8 @@
     <button class="ibtn" id="newBtnNav" title="Create">
       <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M12 8v8M8 12h8"/></svg>
     </button>
-    <button class="ibtn" data-go="dms" title="Messages">
-      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7Z"/></svg>
+    <button class="ibtn" data-go="reels" title="Reels">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M3 8.5h18M8.5 3l2.5 5.5M14.5 3l2.5 5.5"/><path d="m11 12.5 4 2.6-4 2.6z"/></svg>
     </button>
     <button class="ibtn" data-go="profile" title="Profile"><img id="navAvatar" alt=""></button>
   </nav>
@@ -209,6 +217,56 @@
     <h3>Profile <button data-close="userModal">&times;</button></h3>
     <div class="body" id="userModalBody"></div>
   </div>
+</div>
+
+<!-- ===================== STORY COMPOSER ===================== -->
+<div class="modal" id="storyModal">
+  <div class="sheet">
+    <h3>Add to your story <button data-close="storyModal">&times;</button></h3>
+    <div class="body">
+      <div class="drop" id="storyDrop">Tap to choose a photo or video</div>
+      <input type="file" id="storyInput" accept="image/*,video/*" hidden />
+      <div class="preview hidden" id="storyPreview"></div>
+      <div class="field"><label>CAPTION (OPTIONAL)</label><input id="storyCaption" placeholder="Add a caption"></div>
+      <button class="btn primary block" id="storyShare" style="margin-top:18px">Share to story</button>
+      <div class="err" id="storyErr"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== REEL COMPOSER ===================== -->
+<div class="modal" id="reelModal">
+  <div class="sheet">
+    <h3>New reel <button data-close="reelModal">&times;</button></h3>
+    <div class="body">
+      <div class="drop" id="reelDrop">Tap to choose a video</div>
+      <input type="file" id="reelInput" accept="video/*" hidden />
+      <div class="field"><label>CAPTION</label><input id="reelCaption" placeholder="Write a caption..."></div>
+      <button class="btn primary block" id="reelShare" style="margin-top:18px">Share reel</button>
+      <div class="err" id="reelErr"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== FOLLOWERS / FOLLOWING ===================== -->
+<div class="modal" id="followModal">
+  <div class="sheet" style="max-width:440px">
+    <h3 id="followTitle">Followers <button data-close="followModal">&times;</button></h3>
+    <div class="body" id="followBody"></div>
+  </div>
+</div>
+
+<!-- ===================== STORY VIEWER ===================== -->
+<div id="storyViewer" class="hidden">
+  <div class="sv-bars" id="svBars"></div>
+  <div class="sv-head">
+    <img id="svAvatar" alt="">
+    <div><div class="sv-name" id="svName"></div><div class="sv-time" id="svTime"></div></div>
+    <button class="sv-close" id="svClose">&times;</button>
+  </div>
+  <div class="sv-stage" id="svStage"></div>
+  <div class="sv-caption" id="svCaption"></div>
+  <div class="sv-nav"><div class="sv-prev" id="svPrev"></div><div class="sv-next" id="svNext"></div></div>
 </div>
 
 <div class="toast" id="toast"></div>
