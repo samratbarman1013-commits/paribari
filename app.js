@@ -62,9 +62,8 @@ function start(){
   sb = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, {
     auth: { persistSession: true, autoRefreshToken: true }
   });
-  sb.auth.onAuthStateChange((evt, session) => {
+  sb.auth.onAuthStateChange((evt) => {
     if (evt === 'SIGNED_OUT'){ me = null; showAuth(); }
-    else if ((evt === 'SIGNED_IN' || evt === 'INITIAL_SESSION') && session && !me){ afterLogin(); }
   });
   (async () => {
     try{
@@ -83,15 +82,6 @@ $('#tabIn').onclick = ()=>{ $('#tabIn').classList.add('on'); $('#tabUp').classLi
   $('#formIn').classList.remove('hidden'); $('#formUp').classList.add('hidden'); errEl('#authErr',''); errEl('#authOk',''); };
 $('#tabUp').onclick = ()=>{ $('#tabUp').classList.add('on'); $('#tabIn').classList.remove('on');
   $('#formUp').classList.remove('hidden'); $('#formIn').classList.add('hidden'); errEl('#authErr',''); errEl('#authOk',''); };
-
-$('#googleBtn').onclick = async () => {
-  errEl('#authErr',''); errEl('#authOk','');
-  const { error } = await sb.auth.signInWithOAuth({
-    provider: 'google',
-    options: { redirectTo: location.origin + location.pathname }
-  });
-  if (error) errEl('#authErr', error.message);
-};
 
 $('#formIn').onsubmit = async (e) => {
   e.preventDefault(); errEl('#authErr',''); errEl('#authOk','');
@@ -120,15 +110,10 @@ $('#formUp').onsubmit = async (e) => {
   else errEl('#authOk','Account created! Check your email to confirm, then sign in.');
 };
 
-let entering = false;
 async function afterLogin(){
-  if (entering) return;
-  entering = true;
-  try{
-    await loadMe();
-    if (me){ showApp(); await boot(); }
-    else { showAuth(); errEl('#authErr','Signed in, but your profile row is missing. Did you run supabase-schema.sql?'); }
-  } finally { entering = false; }
+  await loadMe();
+  if (me){ showApp(); await boot(); }
+  else { errEl('#authErr','Signed in, but your profile row is missing. Did you run supabase-schema.sql?'); }
 }
 
 async function loadMe(){
@@ -137,15 +122,6 @@ async function loadMe(){
   const { data, error } = await sb.from('profiles').select('*').eq('id', user.id).maybeSingle();
   if (error){ console.error(error); me = null; return; }
   me = data || null;
-  // Google (and other OAuth) sign-ins arrive with a picture — adopt it the first time
-  if (me && !me.avatar_url){
-    const m = user.user_metadata || {};
-    const pic = m.avatar_url || m.picture;
-    if (pic){
-      await sb.from('profiles').update({ avatar_url: pic }).eq('id', me.id);
-      me.avatar_url = pic;
-    }
-  }
 }
 
 /* ============================== BOOT ================================== */
