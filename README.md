@@ -7,8 +7,7 @@ A real, multi-user Instagram-style social app — built with plain HTML/CSS/JS o
 
 ## What actually works
 
-- **Real accounts, no passwords** — sign up with an emailed one-time login link, or one-tap
-  **guest** accounts that need no email at all
+- **Real accounts** — email + password sign-up and sign-in (Supabase Auth)
 - **Real posts** — photos uploaded from your device or camera, stored in Supabase Storage,
   shared between *all* users
 - **Likes, comments, saves** — persisted per user in Postgres
@@ -30,18 +29,15 @@ Supabase project. Do this once:
    entire contents of `supabase-schema.sql`, and click **Run**. This creates the tables,
    security policies, storage buckets and the trigger that makes a profile on sign-up.
 
-3. **Turn on guest sign-ins** — go to **Authentication → Sign In / Providers** and switch
-   **Allow anonymous sign-ins** on, then tap Save. This powers the one-tap "Continue as guest"
-   button.
+3. **Turn off email confirmation (easiest for testing)** — go to
+   **Authentication → Sign In / Providers → Email** and switch *Confirm email* **off**.
+   Then new accounts can sign in immediately. (Leave it on if you'd rather verify emails.)
 
-4. **Set your app's URL** — go to **Authentication → URL Configuration** and set the
-   **Site URL** to `https://samratbarman1013-commits.github.io/paribari/`. The emailed login
-   links point back here.
+4. **Copy your keys** — go to **Settings → API** and copy:
+   - **Project URL** (looks like `https://abcdxyz.supabase.co`)
+   - **anon / public** API key
 
-5. **Copy your keys** — go to **Settings → API Keys** and copy the **publishable key**.
-   (Older projects show an **anon / public** key instead — either works.)
-
-6. **Paste them into `config.js`**:
+5. **Paste them into `config.js`**:
 
    ```js
    window.PARIBARI_CONFIG = {
@@ -50,7 +46,7 @@ Supabase project. Do this once:
    };
    ```
 
-7. Reload the app. That's it — sign in and post.
+6. Reload the app. That's it — sign up and post.
 
 > The anon key is *meant* to be public in front-end code; your data is protected by the
 > Row Level Security policies installed by `supabase-schema.sql`.
