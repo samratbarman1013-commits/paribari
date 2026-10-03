@@ -58,7 +58,8 @@ Supabase project. Do this once:
 | `index.html` | App shell and markup |
 | `styles.css` | All styling (light + dark) |
 | `app.js` | All app logic |
-| `config.js` | **Your Supabase URL + anon key go here** |
+| `config.js` | **Your Supabase URL + publishable key go here** |
+| `supabase.js` | Bundled Supabase client library (no CDN needed) |
 | `supabase-schema.sql` | Run once in the Supabase SQL Editor |
 | `sw.js` | Service worker (offline shell) |
 | `manifest.webmanifest`, `icon-*.png` | PWA install assets |
