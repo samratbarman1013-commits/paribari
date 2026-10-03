@@ -6,594 +6,215 @@
 <meta name="theme-color" content="#0b0b0f" />
 <title>PariBari — share your world</title>
 <link rel="manifest" href="manifest.webmanifest" />
-<link rel="apple-touch-icon" href="icon-192.png" />
-<meta name="description" content="PariBari — a place to share photos, stories and moments with the people you love." />
-<style>
-  :root{
-    --bg:#ffffff; --panel:#ffffff; --text:#0f0f10; --muted:#8e8e93;
-    --border:#efefef; --soft:#fafafa; --accent:#e1306c; --accent2:#f77737;
-    --shadow:0 2px 14px rgba(0,0,0,.06); --heart:#ed4956; --radius:16px;
-  }
-  html[data-theme="dark"]{
-    --bg:#000000; --panel:#121212; --text:#f5f5f5; --muted:#a8a8a8;
-    --border:#262626; --soft:#1a1a1a; --shadow:0 2px 18px rgba(0,0,0,.5);
-  }
-  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-  html,body{margin:0;padding:0}
-  body{
-    background:var(--bg); color:var(--text);
-    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,"Noto Sans",sans-serif;
-    transition:background .25s ease,color .25s ease;
-    padding-bottom:64px;
-  }
-  button{font-family:inherit}
-  a{color:inherit;text-decoration:none}
-
-  /* ---------- Header ---------- */
-  header{
-    position:sticky;top:0;z-index:50;background:color-mix(in srgb,var(--bg) 88%,transparent);
-    backdrop-filter:blur(14px);border-bottom:1px solid var(--border);
-  }
-  .hwrap{max-width:975px;margin:0 auto;display:flex;align-items:center;gap:16px;padding:10px 16px}
-  .logo{font-size:24px;font-weight:800;letter-spacing:-.5px;
-    background:linear-gradient(92deg,#f09433,#e6683c 25%,#dc2743 50%,#cc2366 75%,#bc1888);
-    -webkit-background-clip:text;background-clip:text;color:transparent;white-space:nowrap}
-  .search{flex:1;max-width:300px;position:relative;display:none}
-  .search input{width:100%;padding:9px 14px 9px 38px;border-radius:10px;border:1px solid var(--border);
-    background:var(--soft);color:var(--text);font-size:14px;outline:none}
-  .search svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);opacity:.5}
-  .spacer{flex:1}
-  .icons{display:flex;align-items:center;gap:6px}
-  .ibtn{background:none;border:0;color:var(--text);padding:8px;border-radius:10px;cursor:pointer;display:flex;transition:background .15s}
-  .ibtn:hover{background:var(--soft)}
-  .ibtn.active{color:var(--accent)}
-  @media(min-width:640px){.search{display:block}}
-
-  /* ---------- Layout ---------- */
-  main{max-width:975px;margin:0 auto;padding:18px 12px}
-  .feedcol{max-width:470px;margin:0 auto}
-  .view{display:none}
-  .view.on{display:block}
-
-  /* ---------- Stories ---------- */
-  .stories{display:flex;gap:16px;overflow-x:auto;padding:12px 6px 16px;scrollbar-width:none}
-  .stories::-webkit-scrollbar{display:none}
-  .story{display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;flex:0 0 auto}
-  .ring{padding:2.5px;border-radius:50%;background:linear-gradient(45deg,#f09433,#dc2743,#bc1888)}
-  .ring.seen{background:var(--border)}
-  .ring img{display:block;width:60px;height:60px;border-radius:50%;border:2.5px solid var(--bg);object-fit:cover}
-  .story small{font-size:11px;color:var(--muted);max-width:64px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-
-  /* ---------- Post card ---------- */
-  .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:20px;overflow:hidden;box-shadow:var(--shadow)}
-  .phead{display:flex;align-items:center;gap:10px;padding:11px 13px}
-  .phead img{width:36px;height:36px;border-radius:50%;object-fit:cover;background:var(--soft)}
-  .phead .nm{font-size:14px;font-weight:600;line-height:1.15}
-  .phead .loc{font-size:11.5px;color:var(--muted)}
-  .phead .more{margin-left:auto;background:none;border:0;color:var(--text);font-size:20px;cursor:pointer;padding:0 4px;line-height:1}
-  .pimg{position:relative;background:var(--soft)}
-  .pimg img{width:100%;display:block;aspect-ratio:1/1;object-fit:cover}
-  .pop{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;opacity:0}
-  .pop svg{filter:drop-shadow(0 4px 12px rgba(0,0,0,.4))}
-  .pop.go{animation:pop .9s ease}
-  @keyframes pop{0%{opacity:0;transform:scale(.3)}30%{opacity:1;transform:scale(1.15)}60%{transform:scale(1)}100%{opacity:0;transform:scale(1.05)}}
-  .pacts{display:flex;align-items:center;gap:4px;padding:9px 8px 4px}
-  .pacts .ibtn{padding:7px}
-  .pacts .save{margin-left:auto}
-  .pacts svg{display:block}
-  .plikes{padding:2px 15px;font-size:14px;font-weight:600}
-  .pcap{padding:3px 15px 6px;font-size:14px;line-height:1.45}
-  .pcap b{font-weight:600;margin-right:6px}
-  .ptime{padding:2px 15px 14px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px}
-  .pcomments{padding:0 15px 8px;font-size:13.5px;color:var(--muted);cursor:pointer}
-  .pcomments b{color:var(--text);font-weight:600;margin-right:6px}
-  .cbar{display:flex;border-top:1px solid var(--border);padding:8px 12px;gap:8px;align-items:center}
-  .cbar input{flex:1;border:0;background:none;color:var(--text);font-size:14px;outline:none}
-  .cbar button{background:none;border:0;color:#0095f6;font-weight:600;font-size:14px;cursor:pointer;opacity:.5}
-  .cbar button.on{opacity:1}
-  .clist{padding:0 15px 6px;display:flex;flex-direction:column;gap:5px}
-  .clist div{font-size:13.5px}
-  .clist b{font-weight:600;margin-right:6px}
-  .heart-on{color:var(--heart);fill:var(--heart)}
-
-  /* ---------- Explore / Profile grid ---------- */
-  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:3px}
-  .grid .cell{position:relative;aspect-ratio:1/1;overflow:hidden;background:var(--soft);cursor:pointer}
-  .grid .cell img{width:100%;height:100%;object-fit:cover;display:block}
-  .grid .cell .ov{position:absolute;inset:0;background:rgba(0,0,0,.35);color:#fff;display:flex;gap:16px;
-    align-items:center;justify-content:center;font-weight:600;opacity:0;transition:opacity .2s;font-size:14px}
-  .grid .cell:hover .ov{opacity:1}
-  .grid .cell .ov span{display:flex;align-items:center;gap:5px}
-
-  /* ---------- Profile header ---------- */
-  .prof{display:flex;gap:28px;align-items:center;padding:16px 8px 22px;flex-wrap:wrap}
-  .prof .pic{width:88px;height:88px;border-radius:50%;object-fit:cover;padding:3px;background:linear-gradient(45deg,#f09433,#dc2743,#bc1888)}
-  .prof .pic img{width:100%;height:100%;border-radius:50%;object-fit:cover;border:3px solid var(--bg);display:block}
-  .pinfo{flex:1;min-width:200px}
-  .pinfo h2{font-size:20px;margin:0 0 12px;font-weight:500}
-  .stats{display:flex;gap:26px;margin-bottom:12px}
-  .stats div{font-size:14px}
-  .stats b{font-weight:700}
-  .bio{font-size:14px;line-height:1.5;white-space:pre-line}
-  .bio .nm{font-weight:600}
-  .bio .tag{color:#0095f6}
-  .btn{padding:8px 16px;border-radius:9px;border:1px solid var(--border);background:var(--soft);
-    color:var(--text);font-size:14px;font-weight:600;cursor:pointer;transition:.15s}
-  .btn:hover{background:var(--border)}
-  .btn.primary{background:#0095f6;color:#fff;border-color:#0095f6}
-  .tabs{display:flex;justify-content:center;gap:44px;border-top:1px solid var(--border);margin-top:8px}
-  .tab{padding:14px 0;font-size:12px;letter-spacing:1.5px;font-weight:600;color:var(--muted);border-top:1px solid transparent;margin-top:-1px;cursor:pointer;text-transform:uppercase}
-  .tab.on{color:var(--text);border-top-color:var(--text)}
-
-  /* ---------- Bottom nav ---------- */
-  nav.bottom{position:fixed;bottom:0;left:0;right:0;z-index:50;display:flex;justify-content:space-around;
-    align-items:center;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(14px);
-    border-top:1px solid var(--border);padding:9px 0 calc(9px + env(safe-area-inset-bottom))}
-  nav.bottom .ibtn{padding:8px 18px}
-  @media(min-width:900px){nav.bottom{display:none} body{padding-bottom:0}}
-
-  /* ---------- Modal ---------- */
-  .modal{position:fixed;inset:0;z-index:100;display:none;align-items:center;justify-content:center;
-    background:rgba(0,0,0,.6);backdrop-filter:blur(3px);padding:16px}
-  .modal.on{display:flex}
-  .sheet{background:var(--panel);border:1px solid var(--border);border-radius:18px;width:100%;max-width:480px;
-    max-height:90vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.4)}
-  .sheet h3{margin:0;padding:16px 18px;border-bottom:1px solid var(--border);font-size:16px;display:flex;align-items:center}
-  .sheet h3 button{margin-left:auto;background:none;border:0;color:var(--text);font-size:22px;cursor:pointer;line-height:1}
-  .sheet .body{padding:18px}
-  .drop{border:2px dashed var(--border);border-radius:14px;padding:30px;text-align:center;color:var(--muted);cursor:pointer;transition:.15s}
-  .drop:hover{border-color:var(--accent);color:var(--text)}
-  .field{margin-top:14px}
-  .field label{font-size:12px;color:var(--muted);display:block;margin-bottom:6px;font-weight:600;letter-spacing:.3px}
-  .field input,.field textarea{width:100%;padding:11px 13px;border-radius:11px;border:1px solid var(--border);
-    background:var(--soft);color:var(--text);font-size:14px;outline:none;resize:vertical;font-family:inherit}
-  .field input:focus,.field textarea:focus{border-color:var(--accent)}
-  .preview{margin-top:14px;border-radius:12px;overflow:hidden;border:1px solid var(--border)}
-  .preview img{width:100%;display:block;max-height:280px;object-fit:cover}
-  .toast{position:fixed;bottom:84px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--text);
-    color:var(--bg);padding:10px 20px;border-radius:30px;font-size:13.5px;font-weight:600;opacity:0;
-    transition:.3s;z-index:200;pointer-events:none}
-  .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
-  .empty{text-align:center;color:var(--muted);padding:60px 20px;font-size:14px}
-  .install{position:fixed;left:50%;transform:translateX(-50%);bottom:78px;z-index:60;background:linear-gradient(92deg,#dc2743,#bc1888);
-    color:#fff;border:0;padding:11px 22px;border-radius:30px;font-weight:600;font-size:14px;cursor:pointer;box-shadow:0 8px 24px rgba(220,39,67,.4)}
-  @media(min-width:900px){.install{bottom:22px}}
-</style>
+<link rel="apple-touch-icon" href="apple-touch-icon.png" />
+<link rel="stylesheet" href="styles.css" />
 </head>
 <body>
 
-<header>
-  <div class="hwrap">
-    <div class="logo">PariBari</div>
-    <div class="search">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
-      <input id="searchInput" placeholder="Search people & posts" />
-    </div>
-    <div class="spacer"></div>
-    <div class="icons">
-      <button class="ibtn" id="themeBtn" title="Toggle theme">
-        <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
-      </button>
-      <button class="ibtn" id="newBtnTop" title="Create post">
-        <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M12 8v8M8 12h8"/></svg>
-      </button>
-      <button class="ibtn" data-go="profile" title="Profile">
-        <img id="topAvatar" width="26" height="26" style="border-radius:50%;object-fit:cover" alt="" />
-      </button>
+<!-- ===================== SETUP (no backend keys yet) ===================== -->
+<div id="setup" class="fullscreen hidden">
+  <div class="authbox" style="max-width:460px">
+    <div class="brand">PariBari</div>
+    <p class="brand-sub">Connect your backend to go live</p>
+    <div class="card-panel">
+      <p style="margin:0 0 6px;font-weight:600">This app needs a Supabase project.</p>
+      <p class="muted" style="font-size:13.5px;line-height:1.6;margin:0 0 14px">
+        Once you paste your <b>Project URL</b> and <b>anon public key</b> into
+        <code>config.js</code>, everything below turns on: real sign-up, real
+        posts shared between people, photos, likes, comments, follows, chat
+        and notifications.
+      </p>
+      <ol class="muted" style="font-size:13.5px;line-height:1.7;padding-left:18px;margin:0">
+        <li>Create a free project at <b>supabase.com</b></li>
+        <li>Open <b>SQL Editor</b> and run <code>supabase-schema.sql</code></li>
+        <li>Go to <b>Settings → API</b> and copy the two keys</li>
+        <li>Paste them into <code>config.js</code> and reload</li>
+      </ol>
     </div>
   </div>
-</header>
+</div>
 
-<main>
-  <!-- HOME -->
-  <section class="view on" id="view-home">
-    <div class="feedcol">
-      <div class="stories" id="stories"></div>
-      <div id="feed"></div>
+<!-- ===================== AUTH ===================== -->
+<div id="auth" class="fullscreen hidden">
+  <div class="authbox">
+    <div class="brand">PariBari</div>
+    <p class="brand-sub">Share your world.</p>
+    <div class="card-panel">
+      <div class="tabsline">
+        <button id="tabIn" class="on">Sign in</button>
+        <button id="tabUp">Create account</button>
+      </div>
+
+      <form id="formIn">
+        <div class="field"><label>EMAIL</label><input id="inEmail" type="email" autocomplete="email" required></div>
+        <div class="field"><label>PASSWORD</label><input id="inPass" type="password" autocomplete="current-password" required></div>
+        <button class="btn primary block" style="margin-top:18px" type="submit">Sign in</button>
+      </form>
+
+      <form id="formUp" class="hidden">
+        <div class="field"><label>FULL NAME</label><input id="upName" autocomplete="name" required></div>
+        <div class="field"><label>USERNAME</label><input id="upUser" placeholder="e.g. samrat" required></div>
+        <div class="field"><label>EMAIL</label><input id="upEmail" type="email" autocomplete="email" required></div>
+        <div class="field"><label>PASSWORD</label><input id="upPass" type="password" autocomplete="new-password" minlength="6" required></div>
+        <button class="btn primary block" style="margin-top:18px" type="submit">Create account</button>
+      </form>
+
+      <div class="err" id="authErr"></div>
+      <div class="ok" id="authOk"></div>
     </div>
-  </section>
+  </div>
+</div>
 
-  <!-- EXPLORE -->
-  <section class="view" id="view-explore">
-    <div class="grid" id="exploreGrid"></div>
-  </section>
-
-  <!-- PROFILE -->
-  <section class="view" id="view-profile">
-    <div class="prof">
-      <div class="pic"><img id="profPic" alt="" /></div>
-      <div class="pinfo">
-        <h2 id="profName"></h2>
-        <div class="stats">
-          <div><b id="statPosts">0</b> posts</div>
-          <div><b id="statFollowers">0</b> followers</div>
-          <div><b id="statFollowing">0</b> following</div>
-        </div>
-        <div class="bio" id="profBio"></div>
-        <div style="margin-top:14px;display:flex;gap:10px">
-          <button class="btn" id="editBioBtn">Edit profile</button>
-          <button class="btn" id="logoutBtn">Switch account</button>
-        </div>
+<!-- ===================== APP ===================== -->
+<div id="app" class="hidden">
+  <header>
+    <div class="hwrap">
+      <div class="logo">PariBari</div>
+      <div class="search"><input id="searchInput" placeholder="Search people" /></div>
+      <div class="spacer"></div>
+      <div class="icons">
+        <button class="ibtn" id="themeBtn" title="Toggle theme">
+          <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+        </button>
+        <button class="ibtn" id="newBtnTop" title="Create post">
+          <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M12 8v8M8 12h8"/></svg>
+        </button>
+        <button class="ibtn" data-go="dms" title="Messages">
+          <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7Z"/></svg>
+          <span class="badge hidden" id="dmBadge">0</span>
+        </button>
+        <button class="ibtn" data-go="notifs" title="Notifications">
+          <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 21s-7.5-4.7-9.6-9.2C.9 8.4 2.7 5 6.2 5c2 0 3.3 1.1 4 2.2.6-1.1 2-2.2 4-2.2 3.5 0 5.3 3.4 3.8 6.8C19.5 16.3 12 21 12 21Z"/></svg>
+          <span class="badge hidden" id="notifBadge">0</span>
+        </button>
+        <button class="ibtn" data-go="profile" title="Profile"><img id="topAvatar" alt=""></button>
       </div>
     </div>
-    <div class="tabs"><div class="tab on">Posts</div><div class="tab">Saved</div></div>
-    <div class="grid" id="profGrid"></div>
-  </section>
-</main>
+  </header>
 
-<nav class="bottom">
-  <button class="ibtn active" data-go="home" title="Home">
-    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>
-  </button>
-  <button class="ibtn" data-go="explore" title="Explore">
-    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
-  </button>
-  <button class="ibtn" id="newBtnNav" title="Create">
-    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M12 8v8M8 12h8"/></svg>
-  </button>
-  <button class="ibtn" data-go="profile" title="Profile">
-    <img id="navAvatar" width="26" height="26" style="border-radius:50%;object-fit:cover" alt="" />
-  </button>
-</nav>
+  <main>
+    <section class="view on" id="view-home">
+      <div class="feedcol">
+        <div class="stories" id="stories"></div>
+        <div id="feed"></div>
+      </div>
+    </section>
 
-<button class="install" id="installBtn" style="display:none">Install PariBari app</button>
+    <section class="view" id="view-explore"><div class="grid" id="exploreGrid"></div></section>
 
-<!-- Create modal -->
+    <section class="view" id="view-dms">
+      <div id="dmList"></div>
+      <div id="dmChat" class="hidden"></div>
+    </section>
+
+    <section class="view" id="view-notifs"><div id="notifList"></div></section>
+
+    <section class="view" id="view-profile">
+      <div class="prof">
+        <div class="pic"><img id="profPic" alt=""></div>
+        <div class="pinfo">
+          <h2 id="profName"></h2>
+          <div class="stats">
+            <div><b id="statPosts">0</b> posts</div>
+            <div><b id="statFollowers">0</b> followers</div>
+            <div><b id="statFollowing">0</b> following</div>
+          </div>
+          <div class="bio" id="profBio"></div>
+          <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
+            <button class="btn" id="editBioBtn">Edit profile</button>
+            <button class="btn" id="logoutBtn">Sign out</button>
+          </div>
+        </div>
+      </div>
+      <div class="tabs">
+        <div class="tab on" data-ptab="posts">Posts</div>
+        <div class="tab" data-ptab="saved">Saved</div>
+      </div>
+      <div class="grid" id="profGrid"></div>
+    </section>
+  </main>
+
+  <nav class="bottom">
+    <button class="ibtn active" data-go="home" title="Home">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>
+    </button>
+    <button class="ibtn" data-go="explore" title="Explore">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+    </button>
+    <button class="ibtn" id="newBtnNav" title="Create">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M12 8v8M8 12h8"/></svg>
+    </button>
+    <button class="ibtn" data-go="dms" title="Messages">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7Z"/></svg>
+    </button>
+    <button class="ibtn" data-go="profile" title="Profile"><img id="navAvatar" alt=""></button>
+  </nav>
+
+  <button class="install hidden" id="installBtn">Install PariBari app</button>
+</div>
+
+<!-- ===================== MODALS ===================== -->
 <div class="modal" id="createModal">
   <div class="sheet">
-    <h3>Create new post <button id="closeCreate">&times;</button></h3>
+    <h3>Create new post <button data-close="createModal">&times;</button></h3>
     <div class="body">
-      <div class="drop" id="drop">Click to upload a photo<br><small>or paste an image URL below</small></div>
+      <div class="row" style="gap:8px">
+        <button class="btn" id="pickFile" style="flex:1">Choose photo</button>
+        <button class="btn" id="pickCam" style="flex:1">Use camera</button>
+      </div>
       <input type="file" id="fileInput" accept="image/*" hidden />
-      <div class="field"><label>IMAGE URL (optional)</label><input id="imgUrl" placeholder="https://..." /></div>
-      <div class="preview" id="preview" style="display:none"><img id="previewImg" alt="preview" /></div>
+      <div id="camBox" class="hidden" style="margin-top:12px">
+        <video id="cam" autoplay playsinline muted></video>
+        <div class="row" style="margin-top:10px;gap:8px">
+          <button class="btn primary" id="snapBtn" style="flex:1">Capture</button>
+          <button class="btn" id="camCancel" style="flex:1">Cancel</button>
+        </div>
+      </div>
+      <div class="preview hidden" id="preview"><img id="previewImg" alt="preview"></div>
       <div class="field"><label>CAPTION</label><textarea id="capInput" rows="3" placeholder="Write a caption..."></textarea></div>
-      <div class="field"><label>LOCATION</label><input id="locInput" placeholder="Add location" /></div>
-      <button class="btn primary" id="shareBtn" style="width:100%;margin-top:18px;padding:12px">Share</button>
+      <div class="field"><label>LOCATION</label><input id="locInput" placeholder="Add location"></div>
+      <button class="btn primary block" id="shareBtn" style="margin-top:18px">Share</button>
+      <div class="err" id="createErr"></div>
     </div>
   </div>
 </div>
 
-<!-- Edit bio modal -->
 <div class="modal" id="bioModal">
   <div class="sheet">
-    <h3>Edit profile <button id="closeBio">&times;</button></h3>
+    <h3>Edit profile <button data-close="bioModal">&times;</button></h3>
     <div class="body">
-      <div class="field"><label>NAME</label><input id="bioName" /></div>
-      <div class="field"><label>USERNAME</label><input id="bioUser" /></div>
+      <div class="row" style="gap:14px;align-items:center">
+        <div class="prof" style="padding:0"><div class="pic" style="width:70px;height:70px"><img id="editAvatar" alt=""></div></div>
+        <button class="btn" id="changeAvatar">Change photo</button>
+        <input type="file" id="avatarInput" accept="image/*" hidden />
+      </div>
+      <div class="field"><label>NAME</label><input id="bioName"></div>
+      <div class="field"><label>USERNAME</label><input id="bioUser"></div>
       <div class="field"><label>BIO</label><textarea id="bioText" rows="3"></textarea></div>
-      <button class="btn primary" id="saveBio" style="width:100%;margin-top:18px;padding:12px">Save</button>
+      <button class="btn primary block" id="saveBio" style="margin-top:18px">Save</button>
+      <div class="err" id="bioErr"></div>
     </div>
   </div>
 </div>
 
-<!-- Comments modal -->
 <div class="modal" id="cModal">
   <div class="sheet" style="max-width:440px">
-    <h3>Comments <button id="closeC">&times;</button></h3>
+    <h3>Comments <button data-close="cModal">&times;</button></h3>
     <div class="body" id="cModalBody"></div>
+  </div>
+</div>
+
+<div class="modal" id="userModal">
+  <div class="sheet" style="max-width:440px">
+    <h3>Profile <button data-close="userModal">&times;</button></h3>
+    <div class="body" id="userModalBody"></div>
   </div>
 </div>
 
 <div class="toast" id="toast"></div>
 
-<script>
-/* ============================ PariBari app ============================ */
-const LS = 'paribari_v1';
-const $ = s => document.querySelector(s);
-const $$ = s => document.querySelectorAll(s);
-
-const av = n => `https://i.pravatar.cc/150?img=${n}`;
-const pic = s => `https://picsum.photos/seed/${s}/800/800`;
-
-const svg = {
-  heart:(f)=>`<svg width="24" height="24" viewBox="0 0 24 24" fill="${f?'currentColor':'none'}" stroke="currentColor" stroke-width="1.9"><path d="M12 21s-7.5-4.7-9.6-9.2C.9 8.4 2.7 5 6.2 5c2 0 3.3 1.1 4 2.2.6-1.1 2-2.2 4-2.2 3.5 0 5.3 3.4 3.8 6.8C19.5 16.3 12 21 12 21Z"/></svg>`,
-  comment:`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M21 11.5a8.5 8.5 0 0 1-12.3 7.6L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5Z"/></svg>`,
-  share:`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7Z"/></svg>`,
-  save:(f)=>`<svg width="24" height="24" viewBox="0 0 24 24" fill="${f?'currentColor':'none'}" stroke="currentColor" stroke-width="1.9"><path d="M19 21 12 16l-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2Z"/></svg>`,
-  bigHeart:`<svg width="96" height="96" viewBox="0 0 24 24" fill="#fff"><path d="M12 21s-7.5-4.7-9.6-9.2C.9 8.4 2.7 5 6.2 5c2 0 3.3 1.1 4 2.2.6-1.1 2-2.2 4-2.2 3.5 0 5.3 3.4 3.8 6.8C19.5 16.3 12 21 12 21Z"/></svg>`
-};
-
-const SEED_STORIES = [
-  {n:'Your story', a:av(12), me:true},
-  {n:'aarav.dev', a:av(13)}, {n:'priya_shots', a:av(45)},
-  {n:'kolkata.kid', a:av(33)}, {n:'meera.arts', a:av(47)},
-  {n:'rohan.fit', a:av(51)}, {n:'trip_diaries', a:av(60)}
-];
-
-const SEED_POSTS = [
-  {user:{name:'Aarav Mehta',handle:'aarav.dev',avatar:av(13)}, img:pic('paribari-a'),
-   cap:'Late night coding sessions hit different ☕ building something new for PariBari.',
-   loc:'Bengaluru, India', likes:1284, comments:[{u:'priya_shots',t:'This is so cool 🔥'},{u:'meera.arts',t:'Ship it already!'}], time:'2 HOURS AGO', saved:false, liked:false},
-  {user:{name:'Priya Nair',handle:'priya_shots',avatar:av(45)}, img:pic('paribari-b'),
-   cap:'Golden hour by the ghats. No filter needed 🌅',
-   loc:'Varanasi, India', likes:3491, comments:[{u:'aarav.dev',t:'Stunning colours'},{u:'trip_diaries',t:'Adding this to my list 😍'}], time:'5 HOURS AGO', saved:true, liked:true},
-  {user:{name:'Rohan Das',handle:'rohan.fit',avatar:av(51)}, img:pic('paribari-c'),
-   cap:'Consistency > motivation. 100 days strong 💪',
-   loc:'Mumbai, India', likes:876, comments:[{u:'kolkata.kid',t:'Inspiration 🙌'}], time:'1 DAY AGO', saved:false, liked:false},
-  {user:{name:'Meera Arts',handle:'meera.arts',avatar:av(47)}, img:pic('paribari-d'),
-   cap:'New canvas, new story. Swipe to see the process 🎨',
-   loc:'Jaipur, India', likes:2103, comments:[{u:'priya_shots',t:'Your palette is unreal'},{u:'aarav.dev',t:'Talent 🔥'}], time:'1 DAY AGO', saved:false, liked:false},
-  {user:{name:'Trip Diaries',handle:'trip_diaries',avatar:av(60)}, img:pic('paribari-e'),
-   cap:'Himalayas at sunrise. Worth every step of the trek 🏔️',
-   loc:'Manali, India', likes:5620, comments:[{u:'meera.arts',t:'Breathtaking!'}], time:'2 DAYS AGO', saved:true, liked:false},
-  {user:{name:'Kolkata Kid',handle:'kolkata.kid',avatar:av(33)}, img:pic('paribari-f'),
-   cap:'Durga Puja prep is on 🎉 the whole city is glowing.',
-   loc:'Kolkata, India', likes:4310, comments:[{u:'rohan.fit',t:'Best time of the year!'}], time:'3 DAYS AGO', saved:false, liked:true}
-];
-
-const ME_DEFAULT = {name:'Samrat Barman', handle:'samrat', avatar:av(68),
-  bio:'Building PariBari ✨\n📍 Assam, India\nSharing life, one frame at a time.',
-  followers:1240, following:318};
-
-let state = load();
-let currentView = 'home';
-
-function load(){
-  try{
-    const s = JSON.parse(localStorage.getItem(LS));
-    if(s && s.posts) return s;
-  }catch(e){}
-  return {me:{...ME_DEFAULT}, stories:SEED_STORIES.map(s=>({...s})), posts:SEED_POSTS.map(p=>({...p}))};
-}
-function save(){ try{ localStorage.setItem(LS, JSON.stringify(state)); }catch(e){} }
-
-/* ---------- toast ---------- */
-let toastT;
-function toast(msg){
-  const t=$('#toast'); t.textContent=msg; t.classList.add('on');
-  clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('on'),1900);
-}
-
-/* ---------- theme ---------- */
-function initTheme(){
-  const saved = localStorage.getItem('paribari_theme');
-  const dark = saved ? saved==='dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
-  document.documentElement.setAttribute('data-theme', dark?'dark':'light');
-}
-$('#themeBtn').onclick=()=>{
-  const cur = document.documentElement.getAttribute('data-theme');
-  const nx = cur==='dark'?'light':'dark';
-  document.documentElement.setAttribute('data-theme', nx);
-  localStorage.setItem('paribari_theme', nx);
-};
-initTheme();
-
-/* ---------- navigation ---------- */
-function go(v){
-  currentView=v;
-  $$('.view').forEach(x=>x.classList.remove('on'));
-  $('#view-'+v).classList.add('on');
-  $$('nav.bottom .ibtn[data-go]').forEach(b=>b.classList.toggle('active', b.dataset.go===v));
-  window.scrollTo({top:0,behavior:'smooth'});
-  if(v==='explore') renderExplore();
-  if(v==='profile') renderProfile();
-}
-$$('[data-go]').forEach(b=>b.onclick=()=>go(b.dataset.go));
-
-/* ---------- avatars ---------- */
-function setAvatars(){
-  ['#topAvatar','#navAvatar','#profPic'].forEach(s=>{ const el=$(s); if(el) el.src=state.me.avatar; });
-}
-
-/* ---------- stories ---------- */
-function renderStories(){
-  $('#stories').innerHTML = state.stories.map((s,i)=>
-    `<div class="story" data-i="${i}">
-       <div class="ring ${i>0?'':'seen'}"><img src="${s.a}" alt=""></div>
-       <small>${esc(s.n)}</small>
-     </div>`).join('');
-  $$('#stories .story').forEach(el=>el.onclick=()=>{
-    const i=+el.dataset.i;
-    if(state.stories[i].me){ openCreate(); return; }
-    el.querySelector('.ring').classList.add('seen');
-    toast(`Viewing ${state.stories[i].n}'s story`);
-  });
-}
-
-/* ---------- feed ---------- */
-function esc(s){ return String(s||'').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
-function fmt(n){ return n>=1000 ? (n/1000).toFixed(n%1000>=100?1:0).replace(/\.0$/,'')+'k' : String(n); }
-
-function postHTML(p, idx){
-  const liked = p.liked;
-  const likeCount = p.likes + (liked?0:0);
-  return `<article class="card" data-i="${idx}">
-    <div class="phead">
-      <img src="${p.user.avatar}" alt="">
-      <div><div class="nm">${esc(p.user.handle)}</div>${p.loc?`<div class="loc">${esc(p.loc)}</div>`:''}</div>
-      <button class="more">&middot;&middot;&middot;</button>
-    </div>
-    <div class="pimg">
-      <img src="${p.img}" alt="post by ${esc(p.user.handle)}" loading="lazy">
-      <div class="pop">${svg.bigHeart}</div>
-    </div>
-    <div class="pacts">
-      <button class="ibtn like ${liked?'heart-on':''}" data-act="like">${svg.heart(liked)}</button>
-      <button class="ibtn" data-act="comment">${svg.comment}</button>
-      <button class="ibtn" data-act="share">${svg.share}</button>
-      <button class="ibtn save ${p.saved?'heart-on':''}" data-act="save" style="color:${p.saved?'var(--accent)':'inherit'}">${svg.save(p.saved)}</button>
-    </div>
-    <div class="plikes" data-role="likes">${fmt(p.likes)} likes</div>
-    ${p.cap?`<div class="pcap"><b>${esc(p.user.handle)}</b>${esc(p.cap)}</div>`:''}
-    <div class="pcomments" data-act="comment">View all ${p.comments.length} comments</div>
-    <div class="clist">${p.comments.slice(-2).map(c=>`<div><b>${esc(c.u)}</b>${esc(c.t)}</div>`).join('')}</div>
-    <div class="ptime">${esc(p.time)}</div>
-    <div class="cbar">
-      <input placeholder="Add a comment..." data-role="cinput">
-      <button data-act="postc">Post</button>
-    </div>
-  </article>`;
-}
-
-function renderFeed(){
-  $('#feed').innerHTML = state.posts.map((p,i)=>postHTML(p,i)).join('');
-  wirePosts();
-}
-function renderExplore(){
-  $('#exploreGrid').innerHTML = state.posts.map((p,i)=>
-    `<div class="cell" data-i="${i}"><img src="${p.img}" loading="lazy" alt="">
-      <div class="ov"><span>❤ ${fmt(p.likes)}</span><span>💬 ${p.comments.length}</span></div></div>`).join('');
-  $$('#exploreGrid .cell').forEach(c=>c.onclick=()=>{ go('home'); });
-}
-function renderProfile(){
-  const me=state.me;
-  setAvatars();
-  $('#profName').textContent = me.handle;
-  $('#profBio').innerHTML = `<span class="nm">${esc(me.name)}</span>\n${esc(me.bio)}`;
-  const mine = state.posts.filter(p=>p.user.handle===me.handle);
-  $('#statPosts').textContent = mine.length;
-  $('#statFollowers').textContent = fmt(me.followers);
-  $('#statFollowing').textContent = fmt(me.following);
-  $('#profGrid').innerHTML = (mine.length?mine:state.posts.slice(0,3)).map((p,i)=>
-    `<div class="cell"><img src="${p.img}" loading="lazy" alt="">
-      <div class="ov"><span>❤ ${fmt(p.likes)}</span><span>💬 ${p.comments.length}</span></div></div>`).join('');
-}
-
-function wirePosts(){
-  $$('#feed .card').forEach(card=>{
-    const i=+card.dataset.i, p=state.posts[i];
-    const likeBtn = card.querySelector('[data-act="like"]');
-    const saveBtn = card.querySelector('[data-act="save"]');
-    const likesEl = card.querySelector('[data-role="likes"]');
-    const pop = card.querySelector('.pop');
-
-    const doLike=()=>{
-      p.liked=!p.liked;
-      p.likes += p.liked?1:-1;
-      likeBtn.classList.toggle('heart-on',p.liked);
-      likeBtn.innerHTML = svg.heart(p.liked);
-      likesEl.textContent = fmt(p.likes)+' likes';
-      if(p.liked){ pop.classList.remove('go'); void pop.offsetWidth; pop.classList.add('go'); }
-      save();
-    };
-    likeBtn.onclick=doLike;
-    card.querySelector('.pimg').addEventListener('dblclick',()=>{ if(!p.liked) doLike(); else { pop.classList.remove('go'); void pop.offsetWidth; pop.classList.add('go'); } });
-
-    saveBtn.onclick=()=>{
-      p.saved=!p.saved;
-      saveBtn.classList.toggle('heart-on',p.saved);
-      saveBtn.innerHTML=svg.save(p.saved);
-      saveBtn.style.color = p.saved?'var(--accent)':'inherit';
-      toast(p.saved?'Saved to collection':'Removed from saved'); save();
-    };
-    card.querySelector('[data-act="share"]').onclick=()=>{
-      const url = location.href;
-      if(navigator.share){ navigator.share({title:'PariBari', text:'Check this post on PariBari', url}).catch(()=>{}); }
-      else { navigator.clipboard?.writeText(url); toast('Link copied to clipboard'); }
-    };
-    card.querySelector('.more').onclick=()=>toast('More options coming soon');
-    card.querySelectorAll('[data-act="comment"]').forEach(el=>el.onclick=()=>openComments(i));
-
-    const inp = card.querySelector('[data-role="cinput"]');
-    const btn = card.querySelector('[data-act="postc"]');
-    inp.oninput=()=>btn.classList.toggle('on', inp.value.trim().length>0);
-    const add=()=>{
-      const t=inp.value.trim(); if(!t) return;
-      p.comments.push({u:state.me.handle,t});
-      inp.value=''; btn.classList.remove('on');
-      const cl=card.querySelector('.clist');
-      cl.innerHTML = p.comments.slice(-2).map(c=>`<div><b>${esc(c.u)}</b>${esc(c.t)}</div>`).join('');
-      card.querySelector('.pcomments').textContent = `View all ${p.comments.length} comments`;
-      save(); toast('Comment posted');
-    };
-    btn.onclick=add;
-    inp.addEventListener('keydown',e=>{ if(e.key==='Enter') add(); });
-  });
-}
-
-/* ---------- comments modal ---------- */
-function openComments(i){
-  const p=state.posts[i];
-  const body=$('#cModalBody');
-  const list = ()=>p.comments.map(c=>`<div style="padding:6px 0;font-size:14px"><b>${esc(c.u)}</b> ${esc(c.t)}</div>`).join('') || '<div class="empty">No comments yet. Be the first!</div>';
-  body.innerHTML = `<div style="max-height:44vh;overflow:auto">${list()}</div>
-    <div class="cbar" style="border:1px solid var(--border);border-radius:12px;margin-top:12px">
-      <input id="mcInput" placeholder="Add a comment...">
-      <button id="mcPost" class="on">Post</button>
-    </div>`;
-  const add=()=>{
-    const v=$('#mcInput').value.trim(); if(!v) return;
-    p.comments.push({u:state.me.handle,t:v}); save();
-    body.querySelector('div').innerHTML=list(); $('#mcInput').value='';
-    renderFeed(); toast('Comment posted');
-  };
-  $('#mcPost').onclick=add;
-  $('#mcInput').addEventListener('keydown',e=>{ if(e.key==='Enter') add(); });
-  $('#cModal').classList.add('on');
-}
-$('#closeC').onclick=()=>$('#cModal').classList.remove('on');
-
-/* ---------- create post ---------- */
-let pendingImg=null;
-function openCreate(){ $('#createModal').classList.add('on'); }
-$('#newBtnTop').onclick=openCreate;
-$('#newBtnNav').onclick=openCreate;
-$('#closeCreate').onclick=()=>$('#createModal').classList.remove('on');
-
-$('#drop').onclick=()=>$('#fileInput').click();
-$('#fileInput').onchange=e=>{
-  const f=e.target.files[0]; if(!f) return;
-  const r=new FileReader();
-  r.onload=()=>{ pendingImg=r.result; showPreview(pendingImg); };
-  r.readAsDataURL(f);
-};
-$('#imgUrl').oninput=e=>{ const v=e.target.value.trim(); if(v){ pendingImg=v; showPreview(v);} };
-function showPreview(src){ $('#previewImg').src=src; $('#preview').style.display='block'; }
-
-$('#shareBtn').onclick=()=>{
-  const img = pendingImg || $('#imgUrl').value.trim() || pic('paribari-'+Date.now());
-  const cap = $('#capInput').value.trim();
-  const loc = $('#locInput').value.trim();
-  state.posts.unshift({
-    user:{name:state.me.name,handle:state.me.handle,avatar:state.me.avatar},
-    img, cap, loc, likes:0, comments:[], time:'JUST NOW', saved:false, liked:false
-  });
-  save();
-  $('#createModal').classList.remove('on');
-  $('#capInput').value=''; $('#locInput').value=''; $('#imgUrl').value='';
-  $('#preview').style.display='none'; pendingImg=null;
-  go('home'); renderFeed(); toast('Posted to PariBari 🎉');
-};
-
-/* ---------- edit bio ---------- */
-$('#editBioBtn').onclick=()=>{
-  $('#bioName').value=state.me.name; $('#bioUser').value=state.me.handle; $('#bioText').value=state.me.bio;
-  $('#bioModal').classList.add('on');
-};
-$('#closeBio').onclick=()=>$('#bioModal').classList.remove('on');
-$('#saveBio').onclick=()=>{
-  state.me.name=$('#bioName').value.trim()||state.me.name;
-  state.me.handle=$('#bioUser').value.trim().replace(/\s+/g,'_')||state.me.handle;
-  state.me.bio=$('#bioText').value;
-  save(); $('#bioModal').classList.remove('on'); renderProfile(); renderFeed(); toast('Profile updated');
-};
-$('#logoutBtn').onclick=()=>toast('Account switching is coming soon');
-
-/* ---------- search ---------- */
-$('#searchInput').addEventListener('keydown',e=>{
-  if(e.key!=='Enter') return;
-  const q=e.target.value.trim().toLowerCase(); if(!q) return;
-  const hit=state.posts.find(p=>p.user.handle.toLowerCase().includes(q)||(p.cap||'').toLowerCase().includes(q));
-  if(hit){ go('home'); toast('Found posts by @'+hit.user.handle); }
-  else toast('No results for "'+q+'"');
-});
-
-/* ---------- PWA install ---------- */
-let deferredPrompt=null;
-window.addEventListener('beforeinstallprompt',e=>{
-  e.preventDefault(); deferredPrompt=e; $('#installBtn').style.display='block';
-});
-$('#installBtn').onclick=async()=>{
-  if(!deferredPrompt) return;
-  deferredPrompt.prompt(); await deferredPrompt.userChoice;
-  deferredPrompt=null; $('#installBtn').style.display='none';
-};
-window.addEventListener('appinstalled',()=>{ $('#installBtn').style.display='none'; toast('PariBari installed!'); });
-if('serviceWorker' in navigator){ window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{})); }
-
-/* ---------- boot ---------- */
-setAvatars(); renderStories(); renderFeed();
-</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
 </body>
 </html>
