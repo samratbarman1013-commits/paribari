@@ -2,7 +2,7 @@
    Data always comes live from Supabase, so API calls are never cached. */
 const CACHE = 'paribari-v2';
 const ASSETS = [
-  './', './index.html', './styles.css', './app.js', './config.js',
+  './', './index.html', './styles.css', './app.js', './config.js', './supabase.js',
   './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'
 ];
 
