@@ -38,26 +38,31 @@
 <div id="auth" class="fullscreen hidden">
   <div class="authbox">
     <div class="brand">PariBari</div>
-    <p class="brand-sub">Share your world.</p>
+    <p class="brand-sub">Share your world — no password needed.</p>
     <div class="card-panel">
       <div class="tabsline">
-        <button id="tabIn" class="on">Sign in</button>
-        <button id="tabUp">Create account</button>
+        <button id="tabEmail" class="on">Email</button>
+        <button id="tabGuest">Guest</button>
       </div>
 
-      <form id="formIn">
-        <div class="field"><label>EMAIL</label><input id="inEmail" type="email" autocomplete="email" required></div>
-        <div class="field"><label>PASSWORD</label><input id="inPass" type="password" autocomplete="current-password" required></div>
-        <button class="btn primary block" style="margin-top:18px" type="submit">Sign in</button>
+      <form id="formEmail">
+        <div class="field"><label>YOUR NAME</label><input id="emName" autocomplete="name" required></div>
+        <div class="field"><label>USERNAME</label><input id="emUser" placeholder="e.g. samrat" required></div>
+        <div class="field"><label>EMAIL</label><input id="emEmail" type="email" autocomplete="email" required></div>
+        <button class="btn primary block" style="margin-top:18px" type="submit">Email me a login link</button>
+        <p class="muted" style="font-size:12.5px;margin:12px 0 0;text-align:center;line-height:1.5">
+          No password. We send a link to your email — tap it and you're in.
+        </p>
       </form>
 
-      <form id="formUp" class="hidden">
-        <div class="field"><label>FULL NAME</label><input id="upName" autocomplete="name" required></div>
-        <div class="field"><label>USERNAME</label><input id="upUser" placeholder="e.g. samrat" required></div>
-        <div class="field"><label>EMAIL</label><input id="upEmail" type="email" autocomplete="email" required></div>
-        <div class="field"><label>PASSWORD</label><input id="upPass" type="password" autocomplete="new-password" minlength="6" required></div>
-        <button class="btn primary block" style="margin-top:18px" type="submit">Create account</button>
-      </form>
+      <div id="guestPane" class="hidden">
+        <div class="field"><label>YOUR NAME</label><input id="gName" placeholder="e.g. Samrat"></div>
+        <div class="field"><label>USERNAME</label><input id="gUser" placeholder="e.g. samrat"></div>
+        <button class="btn primary block" id="guestBtn" style="margin-top:18px">Continue as guest</button>
+        <p class="muted" style="font-size:12.5px;margin:12px 0 0;text-align:center;line-height:1.5">
+          No email and no password — you're in instantly. Great for trying it out.
+        </p>
+      </div>
 
       <div class="err" id="authErr"></div>
       <div class="ok" id="authOk"></div>
