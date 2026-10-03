@@ -206,3 +206,78 @@ nav.bottom .ibtn{padding:8px 16px}
   font-weight:600;font-size:14px;cursor:pointer;box-shadow:0 8px 24px rgba(220,39,67,.4)}
 @media(min-width:900px){.install{bottom:22px}}
 video#cam{width:100%;border-radius:12px;background:#000;display:block}
+.preview video{width:100%;display:block;max-height:320px;object-fit:cover}
+
+/* ================= POLISH ================= */
+.card{transition:box-shadow .2s ease, transform .2s ease}
+.card:hover{box-shadow:0 8px 26px rgba(0,0,0,.10)}
+html[data-theme="dark"] .card:hover{box-shadow:0 8px 26px rgba(0,0,0,.6)}
+.btn:active,.ibtn:active{transform:scale(.96)}
+.btn{transition:background .15s, transform .08s, filter .15s}
+.grid .cell{border-radius:4px;overflow:hidden}
+.grid .cell img{transition:transform .35s ease}
+.grid .cell:hover img{transform:scale(1.05)}
+.plikes,.pcap,.pcomments{letter-spacing:.1px}
+header{border-bottom:1px solid var(--border);box-shadow:0 1px 10px rgba(0,0,0,.03)}
+html[data-theme="dark"] header{box-shadow:0 1px 14px rgba(0,0,0,.5)}
+
+/* ================= REELS ================= */
+.reels-top{display:flex;align-items:center;justify-content:space-between;padding:6px 4px 14px}
+.reels-top b{font-size:20px}
+#reelsFeed{display:flex;flex-direction:column;gap:16px;max-width:400px;margin:0 auto}
+.reel{position:relative;background:#000;border-radius:18px;overflow:hidden;aspect-ratio:9/16;border:1px solid var(--border)}
+.reel video{width:100%;height:100%;object-fit:cover;display:block}
+.reel .rv-head{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;gap:10px;padding:14px;
+  background:linear-gradient(180deg,rgba(0,0,0,.6),transparent);color:#fff}
+.reel .rv-head img{width:34px;height:34px;border-radius:50%;object-fit:cover}
+.reel .rv-head .u{font-size:14px;font-weight:600}
+.reel .rv-side{position:absolute;right:10px;bottom:88px;display:flex;flex-direction:column;gap:18px;align-items:center;color:#fff}
+.reel .rv-side button{background:none;border:0;color:#fff;display:flex;flex-direction:column;align-items:center;gap:3px;
+  cursor:pointer;font-size:11px;font-weight:600;padding:0}
+.reel .rv-side button.liked{color:var(--heart)}
+.reel .rv-cap{position:absolute;left:14px;right:76px;bottom:18px;color:#fff;font-size:13.5px;line-height:1.4;
+  text-shadow:0 1px 6px rgba(0,0,0,.65)}
+.reel .rv-cap b{font-weight:700;margin-right:6px}
+.reel .rv-play{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;opacity:0;transition:opacity .2s;pointer-events:none}
+.reel.paused .rv-play{opacity:.9}
+.reel .rv-play svg{filter:drop-shadow(0 2px 12px rgba(0,0,0,.7))}
+
+/* ================= WHO TO FOLLOW ================= */
+.suggest{margin-bottom:18px}
+.suggest h4{margin:0 0 10px;font-size:12.5px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted)}
+.suggest-row{display:flex;gap:12px;overflow-x:auto;padding-bottom:6px;scrollbar-width:none}
+.suggest-row::-webkit-scrollbar{display:none}
+.sug{flex:0 0 auto;width:136px;text-align:center;border:1px solid var(--border);border-radius:16px;
+  padding:16px 10px;background:var(--panel);box-shadow:var(--shadow)}
+.sug img{width:56px;height:56px;border-radius:50%;object-fit:cover;margin-bottom:8px}
+.sug .u{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sug .n{font-size:11.5px;color:var(--muted);margin-bottom:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-height:14px}
+.sug .btn{width:100%;padding:7px 0;font-size:13px}
+
+/* ================= STORY VIEWER ================= */
+#storyViewer{position:fixed;inset:0;z-index:150;background:#000;display:flex;flex-direction:column}
+.sv-bars{display:flex;gap:4px;padding:12px 12px 0}
+.sv-bars i{flex:1;height:3px;border-radius:2px;background:rgba(255,255,255,.3);overflow:hidden;display:block}
+.sv-bars i span{display:block;height:100%;width:0;background:#fff;border-radius:2px}
+.sv-bars i.done span{width:100%}
+.sv-bars i.active span{animation:svfill 5s linear forwards}
+@keyframes svfill{from{width:0}to{width:100%}}
+.sv-head{display:flex;align-items:center;gap:10px;padding:10px 14px;color:#fff;position:relative;z-index:2}
+.sv-head img{width:34px;height:34px;border-radius:50%;object-fit:cover}
+.sv-name{font-size:14px;font-weight:600}
+.sv-time{font-size:11px;opacity:.75}
+.sv-close{margin-left:auto;background:none;border:0;color:#fff;font-size:28px;line-height:1;cursor:pointer;padding:0 4px}
+.sv-stage{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative;z-index:1}
+.sv-stage img,.sv-stage video{max-width:100%;max-height:100%;object-fit:contain}
+.sv-caption{color:#fff;font-size:14px;padding:12px 16px 18px;text-align:center;min-height:22px;position:relative;z-index:2}
+.sv-nav{position:absolute;left:0;right:0;top:104px;bottom:70px;display:flex;z-index:1}
+.sv-prev,.sv-next{flex:1;cursor:pointer}
+.sv-del{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);z-index:3}
+.sv-views{position:absolute;bottom:20px;left:16px;color:#fff;font-size:12.5px;opacity:.85;z-index:3}
+
+/* ================= CHAT UPGRADES ================= */
+.bub{padding:9px 13px 9px 13px}
+.bub img.media{max-width:100%;border-radius:12px;display:block;margin-bottom:6px}
+.ticks{font-size:10.5px;margin-left:6px;opacity:.85;letter-spacing:-1px}
+.ticks.seen{color:#4fc3f7}
+.chatinput .ibtn{padding:6px}
