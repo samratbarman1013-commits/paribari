@@ -51,33 +51,6 @@ Supabase project. Do this once:
 > The anon key is *meant* to be public in front-end code; your data is protected by the
 > Row Level Security policies installed by `supabase-schema.sql`.
 
-## Optional: add "Continue with Google"
-
-Email + password sign-in works out of the box. To *also* offer Google sign-in (no password),
-do this once.
-
-**In Google Cloud Console** (console.cloud.google.com):
-
-1. Create a project (any name is fine).
-2. **APIs & Services → OAuth consent screen** → choose **External**, fill in the app name,
-   your support email and developer email, then save.
-3. **APIs & Services → Credentials → Create credentials → OAuth client ID** →
-   Application type: **Web application**.
-4. Under **Authorized redirect URIs**, add exactly:
-   `https://swtxxkouiuwjeywzxqika.supabase.co/auth/v1/callback`
-5. Click **Create**, then copy the **Client ID** and **Client secret**.
-
-**In Supabase:**
-
-6. **Authentication → Sign In / Providers → Google** → switch it on, paste the Client ID and
-   Client secret, then Save.
-7. **Authentication → URL Configuration** → add
-   `https://samratbarman1013-commits.github.io/paribari/` to **Redirect URLs**, then Save.
-
-After that, the "Continue with Google" button on the sign-in screen works. Google users get
-their Google profile photo pulled in automatically, and a username generated from their email
-address (which they can change in Edit profile).
-
 ## Files
 
 | File | Purpose |
