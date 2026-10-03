@@ -41,12 +41,14 @@ const errEl = (id,msg)=>{ const e=$(id); if(e) e.textContent = msg||''; };
   const dark = saved ? saved==='dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
   document.documentElement.setAttribute('data-theme', dark?'dark':'light');
 })();
-$('#themeBtn').onclick = () => {
+function toggleTheme(){
   const cur = document.documentElement.getAttribute('data-theme');
-  const nx  = cur==='dark' ? 'light' : 'dark';
+  const nx  = cur === 'dark' ? 'light' : 'dark';
   document.documentElement.setAttribute('data-theme', nx);
   localStorage.setItem('paribari_theme', nx);
-};
+}
+const themeBtnEl = $('#themeBtn');
+if (themeBtnEl) themeBtnEl.onclick = toggleTheme;
 
 /* ------------------------------- config ------------------------------- */
 const configured = !!(CFG.SUPABASE_URL && CFG.SUPABASE_ANON_KEY && window.supabase);
@@ -129,12 +131,12 @@ async function boot(){
   if (!me) return;
   paintAvatars();
   await Promise.all([ loadFollowing(), loadSaves() ]);
-  await Promise.all([ loadStories(), loadFeed(), refreshBadges() ]);
+  await Promise.all([ loadStories(), loadNotes(), loadFeed(), refreshBadges() ]);
   subscribeRealtime();
 }
 
 function paintAvatars(){
-  ['#topAvatar','#navAvatar','#profPic','#editAvatar'].forEach(sel => {
+  ['#topAvatar','#navAvatar','#sideAvatar','#profPic','#editAvatar'].forEach(sel => {
     const el = $(sel); if (el) el.src = avatarOf(me);
   });
 }
@@ -148,16 +150,148 @@ async function loadSaves(){
   mySaves = new Set((data||[]).map(r => r.post_id));
 }
 
+/* ---------------- v2 helpers: linkify, carousel, post detail ---------- */
+function linkify(text){
+  return esc(text || '')
+    .replace(/(^|\s)#([A-Za-z0-9_]+)/g, '$1<a href="#" data-tag="$2">#$2</a>')
+    .replace(/(^|\s)@([A-Za-z0-9_]+)/g, '$1<a href="#" data-mention="$2">@$2</a>');
+}
+
+function mediaHTML(p){
+  const media = (p.media && p.media.length) ? p.media : [{ url: p.image_url, media_type: 'image' }];
+  if (media.length === 1){
+    const m = media[0];
+    return m.media_type === 'video'
+      ? `<video src="${esc(m.url)}" playsinline loop muted controls></video>`
+      : `<img src="${esc(m.url)}" alt="post" loading="lazy">`;
+  }
+  return `<div class="caro">
+    ${media.map((m, i) => `<div class="slide ${i === 0 ? 'on' : ''}">${
+      m.media_type === 'video'
+        ? `<video src="${esc(m.url)}" playsinline loop muted controls></video>`
+        : `<img src="${esc(m.url)}" alt="" loading="lazy">`
+    }</div>`).join('')}
+    <div class="dots">${media.map((_, i) => `<i class="${i === 0 ? 'on' : ''}"></i>`).join('')}</div>
+    <span class="badge2">1/${media.length}</span>
+    <button class="nav prev" data-caroprev>‹</button>
+    <button class="nav next" data-caronext>›</button>
+  </div>`;
+}
+
+function wireCarousels(scope){
+  scope.querySelectorAll('.caro').forEach(caro => {
+    const slides = Array.from(caro.querySelectorAll('.slide'));
+    if (slides.length < 2) return;
+    let idx = 0;
+    const dots = Array.from(caro.querySelectorAll('.dots i'));
+    const badge = caro.querySelector('.badge2');
+    const show = (n) => {
+      idx = (n + slides.length) % slides.length;
+      slides.forEach((s, i) => s.classList.toggle('on', i === idx));
+      dots.forEach((d, i) => d.classList.toggle('on', i === idx));
+      if (badge) badge.textContent = (idx + 1) + '/' + slides.length;
+    };
+    const prev = caro.querySelector('[data-caroprev]');
+    const next = caro.querySelector('[data-caronext]');
+    if (prev) prev.onclick = (e) => { e.stopPropagation(); show(idx - 1); };
+    if (next) next.onclick = (e) => { e.stopPropagation(); show(idx + 1); };
+  });
+}
+
+/* global click handler for #hashtags and @mentions */
+document.addEventListener('click', (e) => {
+  const t = e.target.closest('[data-tag]');
+  if (t){ e.preventDefault(); openHashtag(t.dataset.tag); return; }
+  const m = e.target.closest('[data-mention]');
+  if (m){ e.preventDefault(); openMention(m.dataset.mention); return; }
+});
+
+/* ============================ POST DETAIL ============================= */
+let currentPost = null;
+
+async function openPost(postId){
+  let p = feed.find(x => x.id === postId);
+  if (!p){
+    const { data } = await sb.from('posts')
+      .select('id,user_id,image_url,caption,location,created_at, author:profiles(username,name,avatar_url), likes(user_id), comments(id), post_media(url,media_type,position)')
+      .eq('id', postId).maybeSingle();
+    if (!data) return toast('Post not found');
+    p = { ...data,
+      media: (data.post_media || []).slice().sort((a,b) => a.position - b.position).map(m => ({ url:m.url, media_type:m.media_type })),
+      likeCount: (data.likes||[]).length, liked: (data.likes||[]).some(l => l.user_id === me.id),
+      commentCount: (data.comments||[]).length, saved: mySaves.has(data.id) };
+  }
+  currentPost = p;
+  const a = p.author || {};
+  $('#pvMedia').innerHTML = mediaHTML(p);
+  wireCarousels($('#pvMedia'));
+  $('#pvHead').innerHTML = `<span data-uid="${p.user_id}" style="cursor:pointer">${avatarImg(a)}</span>
+    <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600">${esc(a.username||'user')}</div>
+    ${p.location ? `<div class="muted" style="font-size:11.5px">${esc(p.location)}</div>` : ''}</div>`;
+  $('#pvHead').querySelector('[data-uid]').onclick = () => { closePost(); openUserModal(p.user_id); };
+  $('#pvActions').innerHTML = `
+    <div class="pacts">
+      <button class="ibtn ${p.liked?'heart-on':''}" id="pvLike">${svgHeart(p.liked)}</button>
+      <button class="ibtn" id="pvComment">${svgComment()}</button>
+      <button class="ibtn" id="pvShare">${svgShare()}</button>
+      <button class="ibtn save" id="pvSave" style="color:${p.saved?'var(--accent)':'inherit'}">${svgSave(p.saved)}</button>
+    </div>
+    <div class="plikes" id="pvLikes">${fmt(p.likeCount)} ${p.likeCount===1?'like':'likes'}</div>
+    ${p.caption ? `<div class="pcap"><b>${esc(a.username||'user')}</b>${linkify(p.caption)}</div>` : ''}
+    <div class="ptime">${esc(timeAgo(p.created_at))}</div>`;
+  $('#pvLike').onclick = async () => {
+    const on = !p.liked; p.liked = on; p.likeCount += on ? 1 : -1;
+    $('#pvLike').classList.toggle('heart-on', on);
+    $('#pvLike').innerHTML = svgHeart(on);
+    $('#pvLikes').textContent = `${fmt(p.likeCount)} ${p.likeCount===1?'like':'likes'}`;
+    if (on){ await sb.from('likes').insert({ post_id: p.id, user_id: me.id }); if (p.user_id !== me.id) await notify(p.user_id, 'like', p.id); }
+    else { await sb.from('likes').delete().eq('post_id', p.id).eq('user_id', me.id); }
+    loadFeed();
+  };
+  $('#pvSave').onclick = async () => {
+    p.saved = !p.saved;
+    $('#pvSave').innerHTML = svgSave(p.saved);
+    $('#pvSave').style.color = p.saved ? 'var(--accent)' : 'inherit';
+    if (p.saved){ mySaves.add(p.id); await sb.from('saves').insert({ post_id:p.id, user_id:me.id }); toast('Saved'); }
+    else { mySaves.delete(p.id); await sb.from('saves').delete().eq('post_id',p.id).eq('user_id',me.id); toast('Removed from saved'); }
+  };
+  $('#pvShare').onclick = () => openShareSheet(p.id);
+  $('#pvComment').onclick = () => $('#pvInput').focus();
+  $('#pvInput').value = '';
+  $('#postView').classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+  await renderPostComments();
+}
+
+function closePost(){
+  $('#postView').classList.add('hidden');
+  $('#pvMedia').innerHTML = ''; $('#pvComments').innerHTML = '';
+  document.body.style.overflow = '';
+}
+$('#pvClose').onclick = closePost;
+$('#postView').onclick = (e) => { if (e.target.id === 'postView') closePost(); };
+$('#pvPost').onclick = async () => {
+  const v = $('#pvInput').value.trim(); if (!v || !currentPost) return;
+  $('#pvInput').value = '';
+  const { error } = await sb.from('comments').insert({ post_id: currentPost.id, user_id: me.id, body: v });
+  if (error) return toast(error.message);
+  currentPost.commentCount++;
+  if (currentPost.user_id !== me.id) await notify(currentPost.user_id, 'comment', currentPost.id);
+  await renderPostComments();
+};
+$('#pvInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('#pvPost').click(); });
+
 /* ============================== FEED ================================== */
 async function loadFeed(){
   $('#feed').innerHTML = '<div class="spin"></div>';
   const { data, error } = await sb.from('posts')
-    .select('id,user_id,image_url,caption,location,created_at, author:profiles(username,name,avatar_url), likes(user_id), comments(id)')
+    .select('id,user_id,image_url,caption,location,created_at, author:profiles(username,name,avatar_url), likes(user_id), comments(id), post_media(url,media_type,position)')
     .order('created_at', { ascending: false })
     .limit(60);
   if (error){ console.error(error); $('#feed').innerHTML = `<div class="empty">Couldn't load posts.<br>${esc(error.message)}</div>`; return; }
   feed = (data||[]).map(p => ({
     ...p,
+    media: (p.post_media || []).slice().sort((a,b) => a.position - b.position).map(m => ({ url: m.url, media_type: m.media_type })),
     likeCount: (p.likes||[]).length,
     liked: (p.likes||[]).some(l => l.user_id === me.id),
     commentCount: (p.comments||[]).length,
@@ -184,8 +318,8 @@ function postHTML(p, i){
       </div>
       <button class="more" data-act="more">${mine?'🗑':'⋯'}</button>
     </div>
-    <div class="pimg">
-      <img src="${esc(p.image_url)}" alt="post" loading="lazy">
+    <div class="pimg" data-act="openpost">
+      ${mediaHTML(p)}
       <div class="pop">${svgBigHeart()}</div>
     </div>
     <div class="pacts">
@@ -195,7 +329,7 @@ function postHTML(p, i){
       <button class="ibtn save" data-act="save" style="color:${p.saved?'var(--accent)':'inherit'}">${svgSave(p.saved)}</button>
     </div>
     <div class="plikes" data-role="likes">${fmt(p.likeCount)} ${p.likeCount===1?'like':'likes'}</div>
-    ${p.caption ? `<div class="pcap"><b>${esc(a.username||'user')}</b>${esc(p.caption)}</div>` : ''}
+    ${p.caption ? `<div class="pcap"><b>${esc(a.username||'user')}</b>${linkify(p.caption)}</div>` : ''}
     <div class="pcomments" data-act="comment">${p.commentCount ? `View all ${p.commentCount} comments` : 'Add a comment'}</div>
     <div class="ptime">${esc(timeAgo(p.created_at))}</div>
     <div class="cbar">
@@ -208,6 +342,11 @@ function postHTML(p, i){
 function wirePosts(){
   $$('#feed .card').forEach(card => {
     const p = feed[+card.dataset.i];
+    wireCarousels(card);
+    card.querySelectorAll('[data-act="openpost"]').forEach(el => el.onclick = (e) => {
+      if (e.target.closest('.nav')) return;
+      openPost(p.id);
+    });
     const likeBtn = card.querySelector('[data-act="like"]');
     const saveBtn = card.querySelector('[data-act="save"]');
     const likesEl = card.querySelector('[data-role="likes"]');
@@ -281,45 +420,206 @@ async function notify(user_id, type, post_id){
 }
 
 /* ------------------------------ comments ------------------------------ */
+/* --------------------- comments (likes + replies) -------------------- */
+let pendingReplyTo = null;
+
+async function renderCommentsInto(container, postId){
+  if (!container) return [];
+  const { data, error } = await sb.from('comments')
+    .select('id,body,created_at,user_id,parent_id, author:profiles(username,name,avatar_url), comment_likes(user_id)')
+    .eq('post_id', postId).order('created_at', { ascending: true });
+  if (error){ container.innerHTML = `<div class="empty">${esc(error.message)}</div>`; return []; }
+  const rows = data || [];
+  const tops = rows.filter(c => !c.parent_id);
+  const kids = rows.filter(c => c.parent_id);
+  const itemHTML = (c, isReply) => {
+    const likes = (c.comment_likes || []).length;
+    const liked = (c.comment_likes || []).some(l => l.user_id === me.id);
+    return `<div class="citem ${isReply ? 'creply' : ''}" data-cid="${c.id}">
+      ${avatarImg(c.author, 'av')}
+      <div class="cbody">
+        <b>${esc((c.author||{}).username || 'user')}</b>${linkify(c.body)}
+        <div class="cmeta">
+          <span>${esc(timeAgo(c.created_at))}</span>
+          ${likes ? `<span>${likes} ${likes === 1 ? 'like' : 'likes'}</span>` : ''}
+          <button data-act="reply" data-cid="${c.id}" data-u="${esc((c.author||{}).username || '')}">Reply</button>
+        </div>
+      </div>
+      <button class="cheart ${liked ? 'liked' : ''}" data-act="clike" data-cid="${c.id}">${svgHeart(liked)}</button>
+    </div>`;
+  };
+  container.innerHTML = rows.length
+    ? tops.map(c => itemHTML(c, false) + kids.filter(k => k.parent_id === c.id).map(k => itemHTML(k, true)).join('')).join('')
+    : '<div class="empty">No comments yet. Be the first!</div>';
+  container.querySelectorAll('[data-act="clike"]').forEach(b => b.onclick = async () => {
+    const cid = b.dataset.cid;
+    const on = !b.classList.contains('liked');
+    b.classList.toggle('liked', on);
+    b.innerHTML = svgHeart(on);
+    if (on) await sb.from('comment_likes').insert({ comment_id: cid, user_id: me.id });
+    else await sb.from('comment_likes').delete().eq('comment_id', cid).eq('user_id', me.id);
+  });
+  container.querySelectorAll('[data-act="reply"]').forEach(b => b.onclick = () => {
+    const box = $('#postView').classList.contains('hidden') ? $('#mcInput') : $('#pvInput');
+    if (box){ box.value = '@' + b.dataset.u + ' '; box.focus(); }
+    pendingReplyTo = b.dataset.cid;
+  });
+  return rows;
+}
+
+async function renderPostComments(){
+  if (!currentPost) return;
+  const rows = await renderCommentsInto($('#pvComments'), currentPost.id);
+  currentPost.commentCount = (rows || []).length;
+}
+
+async function postComment(postId, inputSel, listSel){
+  const inp = $(inputSel);
+  const v = (inp && inp.value.trim()) || '';
+  if (!v) return;
+  const parent = pendingReplyTo; pendingReplyTo = null;
+  if (inp) inp.value = '';
+  const { error } = await sb.from('comments').insert({ post_id: postId, user_id: me.id, body: v, parent_id: parent });
+  if (error) return toast(error.message);
+  const owner = (feed.find(x => x.id === postId) || {}).user_id;
+  if (owner && owner !== me.id) await notify(owner, 'comment', postId);
+  if (currentPost && currentPost.id === postId && !$('#postView').classList.contains('hidden')) await renderPostComments();
+  else if (listSel) await renderCommentsInto($(listSel), postId);
+  loadFeed();
+  toast('Comment added');
+}
+
 async function openComments(postId){
   const body = $('#cModalBody');
-  body.innerHTML = '<div class="spin"></div>';
   $('#cModal').classList.add('on');
-  const { data, error } = await sb.from('comments')
-    .select('id,body,created_at,user_id, author:profiles(username,name,avatar_url)')
-    .eq('post_id', postId).order('created_at', { ascending: true });
-  if (error){ body.innerHTML = `<div class="empty">${esc(error.message)}</div>`; return; }
-  const listHTML = (rows) => rows.length
-    ? rows.map(c => `<div class="row" style="padding:7px 0;align-items:flex-start;gap:10px">
-        ${avatarImg(c.author)}
-        <div style="flex:1"><b style="font-size:13.5px">${esc((c.author||{}).username||'user')}</b>
-        <span style="font-size:13.5px">${esc(c.body)}</span>
-        <div class="muted" style="font-size:11px">${esc(timeAgo(c.created_at))}</div></div>
-      </div>`).join('')
-    : '<div class="empty">No comments yet. Be the first!</div>';
-  body.innerHTML = `<div style="max-height:44vh;overflow:auto">${listHTML(data||[])}</div>
-    <div class="cbar" style="border:1px solid var(--border);border-radius:12px;margin-top:12px">
+  body.innerHTML = `<div id="cList" style="max-height:50vh;overflow:auto"></div>
+    <div class="cbar" style="border:1px solid var(--border);border-radius:12px;margin-top:14px">
       <input id="mcInput" placeholder="Add a comment...">
       <button id="mcPost" class="on">Post</button>
     </div>`;
-  const add = async () => {
-    const v = $('#mcInput').value.trim(); if (!v) return;
-    const { error } = await sb.from('comments').insert({ post_id: postId, user_id: me.id, body: v });
-    if (error) return toast(error.message);
-    $('#mcInput').value = '';
-    const p = feed.find(x => x.id === postId);
-    if (p){ p.commentCount++; }
-    const { data: rows } = await sb.from('comments')
-      .select('id,body,created_at,user_id, author:profiles(username,name,avatar_url)')
-      .eq('post_id', postId).order('created_at', { ascending: true });
-    body.querySelector('div').innerHTML = listHTML(rows||[]);
-    const owner = (feed.find(x => x.id === postId) || {}).user_id;
-    if (owner && owner !== me.id) await notify(owner, 'comment', postId);
-    renderFeed();
-    toast('Comment added');
-  };
-  $('#mcPost').onclick = add;
-  $('#mcInput').addEventListener('keydown', e => { if (e.key === 'Enter') add(); });
+  await renderCommentsInto($('#cList'), postId);
+  $('#mcPost').onclick = () => postComment(postId, '#mcInput', '#cList');
+  $('#mcInput').addEventListener('keydown', e => { if (e.key === 'Enter') postComment(postId, '#mcInput', '#cList'); });
+}
+
+/* ============================ SEARCH / TAGS =========================== */
+let searchTab = 'top', searchQuery = '', searchDebounce = null;
+
+$$('#searchTabs button').forEach(b => b.onclick = () => {
+  $$('#searchTabs button').forEach(x => x.classList.toggle('on', x === b));
+  searchTab = b.dataset.stab;
+  runSearch();
+});
+$('#exploreSearch').addEventListener('input', (e) => {
+  searchQuery = e.target.value.trim();
+  clearTimeout(searchDebounce);
+  searchDebounce = setTimeout(runSearch, 250);
+});
+
+function postTile(p){
+  const first = (p.post_media || []).slice().sort((a,b) => a.position - b.position)[0] || { url: p.image_url, media_type: 'image' };
+  const lc = (p.likes || []).length;
+  return `<div class="cell" data-pid="${p.id}">
+    ${first.media_type === 'video'
+      ? `<video src="${esc(first.url)}" muted playsinline></video>`
+      : `<img src="${esc(first.url)}" loading="lazy" alt="">`}
+    <div class="ov"><span>♥ ${fmt(lc)}</span></div></div>`;
+}
+function personRows(people){
+  if (!people.length) return '<div class="empty">No people found.</div>';
+  return people.map(p => `<div class="person" data-uid="${p.id}" style="cursor:pointer">
+      ${avatarImg(p)}<div class="meta"><div class="h">${esc(p.username)}</div>
+      <div class="s">${esc(p.name || '')}</div></div></div>`).join('');
+}
+
+async function runSearch(){
+  const box = $('#searchResults');
+  if (!searchQuery){
+    box.innerHTML = '';
+    $('#exploreGrid').classList.remove('hidden');
+    $('#followSuggest').classList.remove('hidden');
+    return;
+  }
+  $('#exploreGrid').classList.add('hidden');
+  $('#followSuggest').classList.add('hidden');
+  box.innerHTML = '<div class="spin"></div>';
+  const q = searchQuery.replace(/^#/, '');
+
+  if (searchTab === 'people'){
+    const { data } = await sb.from('profiles').select('id,username,name,avatar_url')
+      .or(`username.ilike.%${q}%,name.ilike.%${q}%`).limit(30);
+    box.innerHTML = personRows((data || []).filter(p => p.id !== me.id));
+    $$('#searchResults .person').forEach(el => el.onclick = () => openUserModal(el.dataset.uid));
+    return;
+  }
+
+  const [{ data: profs }, { data: posts }] = await Promise.all([
+    sb.from('profiles').select('id,username,name,avatar_url').ilike('username', `%${q}%`).limit(8),
+    sb.from('posts').select('id,image_url,caption,user_id, post_media(url,media_type,position), likes(user_id)')
+      .ilike('caption', `%${q}%`).limit(30)
+  ]);
+  const people = (profs || []).filter(p => p.id !== me.id);
+  const list = posts || [];
+
+  if (searchTab === 'tags'){
+    box.innerHTML = list.length
+      ? `<div class="tagrow" data-taggo="${esc(q)}"><div class="tav">#</div>
+           <div class="tmeta"><div class="h">#${esc(q)}</div>
+           <div class="s">${list.length} ${list.length === 1 ? 'post' : 'posts'}</div></div></div>`
+      : '<div class="empty">No posts with that hashtag yet.</div>';
+    box.querySelectorAll('[data-taggo]').forEach(el => el.onclick = () => openHashtag(el.dataset.taggo));
+    return;
+  }
+
+  box.innerHTML = (people.length ? personRows(people) : '') +
+    (list.length ? `<div class="grid" style="margin-top:14px">${list.map(postTile).join('')}</div>`
+                 : (people.length ? '' : '<div class="empty">Nothing found.</div>'));
+  $$('#searchResults .person').forEach(el => el.onclick = () => openUserModal(el.dataset.uid));
+  $$('#searchResults .cell').forEach(el => el.onclick = () => openPost(el.dataset.pid));
+}
+
+async function openHashtag(tag){
+  go('explore');
+  $('#exploreSearch').value = '#' + tag;
+  searchQuery = '#' + tag;
+  searchTab = 'tags';
+  $$('#searchTabs button').forEach(x => x.classList.toggle('on', x.dataset.stab === 'tags'));
+  await runSearch();
+}
+
+async function openMention(username){
+  const { data } = await sb.from('profiles').select('id,username,name,avatar_url').ilike('username', username).limit(1);
+  if (data && data[0]) openUserModal(data[0].id);
+  else toast('No user @' + username);
+}
+
+/* ============================ SHARE SHEET ============================= */
+async function openShareSheet(postId){
+  const body = $('#shareBody');
+  body.innerHTML = '<div class="spin"></div>';
+  $('#shareModal').classList.add('on');
+  const { data } = await sb.from('profiles').select('id,username,name,avatar_url').limit(60);
+  const people = (data || []).filter(p => p.id !== me.id);
+  if (!people.length){ body.innerHTML = '<div class="empty">Follow someone first to share with them.</div>'; return; }
+  body.innerHTML = people.map(p => `<div class="person" data-uid="${p.id}" style="cursor:pointer">
+      ${avatarImg(p)}<div class="meta"><div class="h">${esc(p.username)}</div>
+      <div class="s">${esc(p.name || '')}</div></div>
+      <button class="btn primary" data-act="send">Send</button></div>`).join('');
+  $$('#shareBody .person').forEach(el => el.onclick = (e) => {
+    if (e.target.closest('button')) return;
+    sendPost(el.dataset.uid, postId);
+  });
+  $$('#shareBody [data-act="send"]').forEach(b => b.onclick = (e) => {
+    e.stopPropagation();
+    sendPost(b.closest('.person').dataset.uid, postId);
+  });
+}
+async function sendPost(uid, postId){
+  const { error } = await sb.from('messages').insert({ sender_id: me.id, receiver_id: uid, body: '', shared_post_id: postId });
+  if (error) return toast(error.message);
+  await notify(uid, 'message', null);
+  closeAllModals();
+  toast('Sent');
 }
 
 /* ============================= EXPLORE ================================ */
@@ -327,43 +627,48 @@ async function loadExplore(){
   loadSuggestions();
   $('#exploreGrid').innerHTML = '<div class="spin"></div>';
   const { data, error } = await sb.from('posts')
-    .select('id,image_url,user_id, likes(user_id), comments(id)')
+    .select('id,image_url,user_id, likes(user_id), comments(id), post_media(url,media_type,position)')
     .order('created_at', { ascending: false }).limit(90);
   if (error){ $('#exploreGrid').innerHTML = `<div class="empty">${esc(error.message)}</div>`; return; }
   const rows = data||[];
   if (!rows.length){ $('#exploreGrid').innerHTML = '<div class="empty">Nothing here yet.</div>'; return; }
   $('#exploreGrid').innerHTML = rows.map(p => {
     const lc = (p.likes||[]).length, cc = (p.comments||[]).length;
-    return `<div class="cell" data-uid="${p.user_id}"><img src="${esc(p.image_url)}" loading="lazy" alt="">
+    const first = (p.post_media || []).slice().sort((a,b) => a.position - b.position)[0] || { url: p.image_url, media_type: 'image' };
+    const isVid = first.media_type === 'video';
+    return `<div class="cell" data-pid="${p.id}">
+      ${isVid ? `<video src="${esc(first.url)}" muted playsinline></video>` : `<img src="${esc(first.url)}" loading="lazy" alt="">`}
+      ${isVid ? '<span style="position:absolute;top:8px;right:8px;color:#fff;font-size:13px;text-shadow:0 1px 4px #000">▶</span>' : ''}
       <div class="ov"><span>♥ ${fmt(lc)}</span><span>💬 ${cc}</span></div></div>`;
   }).join('');
-  $$('#exploreGrid .cell').forEach(c => c.onclick = () => openUserModal(c.dataset.uid));
+  $$('#exploreGrid .cell').forEach(c => c.onclick = () => openPost(c.dataset.pid));
 }
 
 /* ========================== WHO TO FOLLOW ============================ */
 async function loadSuggestions(){
-  const el = $('#followSuggest');
   const { data } = await sb.from('profiles').select('id,username,name,avatar_url').limit(40);
   const people = (data || []).filter(p => p.id !== me.id && !myFollowing.has(p.id)).slice(0, 12);
-  if (!people.length){ el.innerHTML = ''; return; }
-  el.innerHTML = `<div class="suggest"><h4>Who to follow</h4><div class="suggest-row">${
-    people.map(p => `<div class="sug" data-uid="${p.id}">
-      ${avatarImg(p)}
-      <div class="u">${esc(p.username)}</div>
-      <div class="n">${esc(p.name || '')}</div>
-      <button class="btn primary" data-act="follow" data-uid="${p.id}">Follow</button>
-    </div>`).join('')}</div></div>`;
-  $$('#followSuggest [data-act="follow"]').forEach(b => b.onclick = async (e) => {
+  const markup = people.length
+    ? `<div class="suggest"><h4>Who to follow</h4><div class="suggest-row">${
+        people.map(p => `<div class="sug" data-uid="${p.id}">
+          ${avatarImg(p)}
+          <div class="txt"><div class="u">${esc(p.username)}</div><div class="n">${esc(p.name || '')}</div></div>
+          <button class="btn primary" data-act="follow" data-uid="${p.id}">Follow</button>
+        </div>`).join('')}</div></div>`
+    : '';
+  const a = $('#followSuggest'); if (a) a.innerHTML = markup;
+  const b = $('#railSuggest'); if (b) b.innerHTML = markup;
+  $$('#followSuggest [data-act="follow"], #railSuggest [data-act="follow"]').forEach(btn => btn.onclick = async (e) => {
     e.stopPropagation();
-    const uid = b.dataset.uid;
+    const uid = btn.dataset.uid;
     if (myFollowing.has(uid)) return;
     await sb.from('follows').insert({ follower_id: me.id, following_id: uid });
     myFollowing.add(uid);
-    b.textContent = 'Following'; b.classList.remove('primary');
+    $$(`[data-act="follow"][data-uid="${uid}"]`).forEach(x => { x.textContent = 'Following'; x.classList.remove('primary'); });
     await notify(uid, 'follow', null);
     toast('Following');
   });
-  $$('#followSuggest .sug').forEach(s => s.onclick = (e) => {
+  $$('#followSuggest .sug, #railSuggest .sug').forEach(s => s.onclick = (e) => {
     if (!e.target.closest('button')) openUserModal(s.dataset.uid);
   });
 }
@@ -616,20 +921,27 @@ function renderStory(){
     ? `<video src="${esc(s.media_url)}" autoplay playsinline></video>`
     : `<img src="${esc(s.media_url)}" alt="">`;
 
+  const isReal = !String(s.id).startsWith('hl-');
   $('#svCaption').innerHTML = esc(s.caption || '') +
-    (mine ? `<div style="margin-top:12px"><button class="btn" id="svDelete">Delete story</button></div>` : '');
-  if (mine){
+    (mine && isReal
+      ? `<div class="sv-actions"><button class="btn" id="svDelete">Delete</button><button class="btn" id="svHighlight">Add to highlight</button></div>`
+      : '');
+  if (mine && isReal){
     const del = $('#svDelete');
     if (del) del.onclick = async () => {
       await sb.from('stories').delete().eq('id', s.id);
       closeStoryViewer(); toast('Story deleted');
     };
+    const hl = $('#svHighlight');
+    if (hl) hl.onclick = openHighlightComposer;
   }
+  const rb = $('#svReplyBar');
+  if (rb) rb.style.display = mine ? 'none' : 'flex';
 
   $('#svBars').innerHTML = g.stories.map((_, i) =>
     `<i class="${i < svIndex ? 'done' : ''} ${i === svIndex ? 'active' : ''}"><span></span></i>`).join('');
 
-  sb.from('story_views').upsert({ story_id: s.id, viewer_id: me.id }).then(() => {});
+  if (isReal) sb.from('story_views').upsert({ story_id: s.id, viewer_id: me.id }).then(() => {});
 
   clearTimeout(svTimer);
   svTimer = setTimeout(storyNext, s.media_type === 'video' ? 8000 : 5000);
@@ -656,6 +968,19 @@ function closeStoryViewer(){
 $('#svClose').onclick = closeStoryViewer;
 $('#svNext').onclick = storyNext;
 $('#svPrev').onclick = storyPrev;
+$('#svReplySend').onclick = async () => {
+  const inp = $('#svReply');
+  const v = inp.value.trim(); if (!v) return;
+  const g = storyGroups[svGroup]; if (!g) return;
+  const owner = g.profile.id;
+  if (owner === me.id) return toast('That is your own story');
+  inp.value = '';
+  const { error } = await sb.from('messages').insert({ sender_id: me.id, receiver_id: owner, body: 'Replied to your story: ' + v });
+  if (error) return toast(error.message);
+  await notify(owner, 'message', null);
+  toast('Reply sent');
+};
+$('#svReply').addEventListener('keydown', e => { if (e.key === 'Enter') $('#svReplySend').click(); });
 
 /* ---- story composer ---- */
 let storyBlob = null, storyKind = 'image';
@@ -695,11 +1020,11 @@ $('#storyShare').onclick = async () => {
 };
 
 /* ============================ CREATE POST ============================= */
-let pendingBlob = null, camStream = null;
+let pendingFiles = [], camStream = null;
 
 function openCreate(){ errEl('#createErr',''); $('#createModal').classList.add('on'); }
-$('#newBtnTop').onclick = openCreate;
-$('#newBtnNav').onclick = openCreate;
+const nbTop = $('#newBtnTop'); if (nbTop) nbTop.onclick = openCreate;
+const nbNav = $('#newBtnNav'); if (nbNav) nbNav.onclick = openCreate;
 $$('[data-close]').forEach(b => b.onclick = () => { closeAllModals(); });
 function closeAllModals(){
   $$('.modal').forEach(m => m.classList.remove('on'));
@@ -707,16 +1032,31 @@ function closeAllModals(){
 }
 $('#pickFile').onclick = () => $('#fileInput').click();
 $('#fileInput').onchange = (e) => {
-  const f = e.target.files[0]; if (!f) return;
-  pendingBlob = f; showPreview(URL.createObjectURL(f));
+  pendingFiles = Array.from(e.target.files || []);
+  renderPreview();
 };
+
+function renderPreview(){
+  const box = $('#preview');
+  if (!pendingFiles.length){ box.classList.add('hidden'); box.innerHTML = ''; return; }
+  box.classList.remove('hidden');
+  box.innerHTML = `<div style="display:flex;gap:8px;overflow-x:auto">${pendingFiles.map(f => {
+    const url = URL.createObjectURL(f);
+    const isVid = (f.type || '').startsWith('video');
+    return `<div style="flex:0 0 auto;width:110px;height:110px;border-radius:10px;overflow:hidden;border:1px solid var(--border);background:var(--soft)">${
+      isVid ? `<video src="${url}" muted playsinline style="width:100%;height:100%;object-fit:cover"></video>`
+            : `<img src="${url}" alt="" style="width:100%;height:100%;object-fit:cover">`
+    }</div>`;
+  }).join('')}</div>
+  <div class="muted" style="font-size:12px;margin-top:8px">${pendingFiles.length} item${pendingFiles.length > 1 ? 's' : ''} selected${pendingFiles.length > 1 ? ' — this will be a carousel' : ''}</div>`;
+}
 
 $('#pickCam').onclick = async () => {
   try{
     camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
     $('#cam').srcObject = camStream;
     $('#camBox').classList.remove('hidden');
-  }catch(err){ errEl('#createErr','Camera unavailable: '+err.message); }
+  }catch(err){ errEl('#createErr','Camera unavailable: ' + err.message); }
 };
 function stopCam(){
   if (camStream){ camStream.getTracks().forEach(t => t.stop()); camStream = null; }
@@ -728,28 +1068,39 @@ $('#snapBtn').onclick = () => {
   const c = document.createElement('canvas');
   c.width = v.videoWidth || 720; c.height = v.videoHeight || 720;
   c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
-  c.toBlob(blob => { pendingBlob = blob; showPreview(URL.createObjectURL(blob)); stopCam(); }, 'image/jpeg', 0.9);
+  c.toBlob(blob => {
+    pendingFiles = [new File([blob], 'camera.jpg', { type: 'image/jpeg' })];
+    renderPreview(); stopCam();
+  }, 'image/jpeg', 0.9);
 };
-function showPreview(src){ $('#previewImg').src = src; $('#preview').classList.remove('hidden'); }
 
 $('#shareBtn').onclick = async () => {
   errEl('#createErr','');
-  if (!pendingBlob) return errEl('#createErr','Please choose or capture a photo first.');
+  if (!pendingFiles.length) return errEl('#createErr','Please choose a photo or video first.');
   const btn = $('#shareBtn'); btn.disabled = true; btn.textContent = 'Uploading...';
   try{
-    const path = `${me.id}/${Date.now()}.jpg`;
-    const { error: upErr } = await sb.storage.from('posts').upload(path, pendingBlob, { contentType: pendingBlob.type || 'image/jpeg' });
-    if (upErr) throw upErr;
-    const { data: { publicUrl } } = sb.storage.from('posts').getPublicUrl(path);
-    const { error } = await sb.from('posts').insert({
-      user_id: me.id, image_url: publicUrl,
-      caption: $('#capInput').value.trim(), location: $('#locInput').value.trim()
-    });
+    const caption = $('#capInput').value.trim();
+    const location = $('#locInput').value.trim();
+    const { data: post, error } = await sb.from('posts')
+      .insert({ user_id: me.id, image_url: '', caption, location }).select().single();
     if (error) throw error;
-    pendingBlob = null;
+    const mediaRows = [];
+    for (let i = 0; i < pendingFiles.length; i++){
+      const f = pendingFiles[i];
+      const isVid = (f.type || '').startsWith('video');
+      const path = `${me.id}/${post.id}-${i}.${isVid ? 'mp4' : 'jpg'}`;
+      const { error: ue } = await sb.storage.from('posts').upload(path, f, { contentType: f.type || 'image/jpeg' });
+      if (ue) throw ue;
+      const { data: { publicUrl } } = sb.storage.from('posts').getPublicUrl(path);
+      mediaRows.push({ post_id: post.id, position: i, url: publicUrl, media_type: isVid ? 'video' : 'image' });
+    }
+    const { error: e2 } = await sb.from('post_media').insert(mediaRows);
+    if (e2) throw e2;
+    await sb.from('posts').update({ image_url: mediaRows[0].url }).eq('id', post.id);
+    pendingFiles = [];
     $('#capInput').value = ''; $('#locInput').value = '';
-    $('#preview').classList.add('hidden');
-    closeAllModals(); go('home'); await loadFeed(); toast('Posted to PariBari 🎉');
+    $('#preview').classList.add('hidden'); $('#preview').innerHTML = '';
+    closeAllModals(); go('home'); await loadFeed(); toast('Posted to PariBari');
   }catch(err){ errEl('#createErr', err.message); }
   btn.disabled = false; btn.textContent = 'Share';
 };
@@ -852,6 +1203,7 @@ async function loadDMs(){
 
 async function openChat(uid){
   chatPeer = uid;
+  chatReplyTo = null;
   $('#dmList').classList.add('hidden'); $('#dmChat').classList.remove('hidden');
   const { data: p } = await sb.from('profiles').select('id,username,name,avatar_url').eq('id', uid).maybeSingle();
   chatPeerProfile = p || { id: uid, username:'user' };
@@ -863,6 +1215,8 @@ async function openChat(uid){
         <div><div style="font-size:14px;font-weight:600">${esc(chatPeerProfile.username)}</div></div>
       </div>
       <div class="chatbody" id="chatBody"></div>
+      <div class="typing" id="typing"></div>
+      <div id="replyBar" class="hidden" style="display:flex;align-items:center;gap:8px;padding:8px 14px;border-top:1px solid var(--border);font-size:12.5px;color:var(--muted)"></div>
       <div class="chatinput">
         <button class="ibtn" id="chatPhoto" title="Send a photo">${svgImage()}</button>
         <input id="chatMsg" placeholder="Message...">
@@ -875,9 +1229,28 @@ async function openChat(uid){
   await renderChat();
   $('#chatSend').onclick = sendChat;
   $('#chatMsg').addEventListener('keydown', e => { if (e.key === 'Enter') sendChat(); });
+  $('#chatMsg').addEventListener('input', pingTyping);
   $('#chatPhoto').onclick = () => $('#chatFile').click();
   $('#chatFile').onchange = sendChatPhoto;
   openChatChannel();
+}
+
+let chatReplyTo = null, typingSentAt = 0, typingTimer = null;
+function pingTyping(){
+  if (!dmChannel) return;
+  const now = Date.now();
+  if (now - typingSentAt < 2000) return;
+  typingSentAt = now;
+  dmChannel.send({ type: 'broadcast', event: 'typing', payload: { from: me.id } }).catch(() => {});
+}
+function setReplyBar(){
+  const bar = $('#replyBar'); if (!bar) return;
+  if (!chatReplyTo){ bar.classList.add('hidden'); bar.innerHTML = ''; return; }
+  bar.classList.remove('hidden');
+  bar.innerHTML = `<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Replying to: ${esc(chatReplyTo.body || 'message')}</span>
+    <button class="btn" style="padding:3px 10px;font-size:12px" id="replyCancel">Cancel</button>`;
+  const c = $('#replyCancel');
+  if (c) c.onclick = () => { chatReplyTo = null; setReplyBar(); };
 }
 
 async function markChatRead(){
@@ -890,26 +1263,59 @@ let chatPeerProfile = null;
 
 async function renderChat(){
   const { data, error } = await sb.from('messages')
-    .select('id,sender_id,receiver_id,body,created_at,read_at,media_url,media_type')
+    .select('id,sender_id,receiver_id,body,created_at,read_at,media_url,media_type,reply_to,shared_post_id, shared:posts(image_url), message_reactions(emoji,user_id)')
     .or(`and(sender_id.eq.${me.id},receiver_id.eq.${chatPeer}),and(sender_id.eq.${chatPeer},receiver_id.eq.${me.id})`)
     .order('created_at', { ascending: true }).limit(500);
   const body = $('#chatBody');
   if (!body) return;
   if (error){ body.innerHTML = `<div class="empty">${esc(error.message)}</div>`; return; }
-  body.innerHTML = (data||[]).map(m => {
+  const rows = data || [];
+  const byId = {};
+  rows.forEach(m => { byId[m.id] = m; });
+  body.innerHTML = rows.map(m => {
     const mine = m.sender_id === me.id;
     const media = m.media_url ? `<img class="media" src="${esc(m.media_url)}" alt="">` : '';
+    const shared = (m.shared && m.shared.image_url)
+      ? `<div class="sharecard"><img src="${esc(m.shared.image_url)}" alt=""></div>` : '';
+    const quoted = m.reply_to && byId[m.reply_to]
+      ? `<div class="replyquote">${esc((byId[m.reply_to].body || 'photo').slice(0, 70))}</div>` : '';
+    const reacts = m.message_reactions || [];
+    const reactPill = reacts.length ? `<span class="msgreact">${esc(reacts[0].emoji)}${reacts.length > 1 ? ' ' + reacts.length : ''}</span>` : '';
     const ticks = mine ? `<span class="ticks ${m.read_at ? 'seen' : ''}">${m.read_at ? '✓✓' : '✓'}</span>` : '';
     const txt = m.body ? esc(m.body) : '';
-    return `<div class="bub ${mine?'me':'them'}">${media}${txt}${ticks}</div>`;
+    return `<div class="msgrow ${mine ? 'me' : 'them'}">
+      <button class="rbtn" data-reply="${m.id}" data-body="${esc((m.body || 'photo').slice(0, 60))}" title="Reply">↩</button>
+      <div class="bub ${mine ? 'me' : 'them'}" data-mid="${m.id}">${quoted}${shared}${media}${txt}${ticks}${reactPill}</div>
+    </div>`;
   }).join('') || '<div class="empty">Say hi 👋</div>';
+
+  body.querySelectorAll('[data-reply]').forEach(b => b.onclick = () => {
+    chatReplyTo = { id: b.dataset.reply, body: b.dataset.body };
+    setReplyBar();
+    const inp = $('#chatMsg'); if (inp) inp.focus();
+  });
+  body.querySelectorAll('.bub[data-mid]').forEach(b => {
+    b.ondblclick = () => toggleReaction(b.dataset.mid);
+  });
   body.scrollTop = body.scrollHeight;
+}
+
+async function toggleReaction(mid){
+  const { data } = await sb.from('message_reactions').select('emoji').eq('message_id', mid).eq('user_id', me.id);
+  if (data && data.length){
+    await sb.from('message_reactions').delete().eq('message_id', mid).eq('user_id', me.id);
+  } else {
+    await sb.from('message_reactions').insert({ message_id: mid, user_id: me.id, emoji: '❤️' });
+  }
+  renderChat();
 }
 
 async function sendChat(){
   const inp = $('#chatMsg'); const v = inp.value.trim(); if (!v) return;
   inp.value = '';
-  const { error } = await sb.from('messages').insert({ sender_id: me.id, receiver_id: chatPeer, body: v });
+  const reply = chatReplyTo ? chatReplyTo.id : null;
+  chatReplyTo = null; setReplyBar();
+  const { error } = await sb.from('messages').insert({ sender_id: me.id, receiver_id: chatPeer, body: v, reply_to: reply });
   if (error) return toast(error.message);
   await notify(chatPeer, 'message', null);
   await renderChat();
@@ -933,13 +1339,26 @@ async function sendChatPhoto(e){
 
 function openChatChannel(){
   closeChatChannel();
-  dmChannel = sb.channel('chat-'+chatPeer+'-'+Date.now())
+  const key = 'chat-' + [me.id, chatPeer].sort().join('-');
+  dmChannel = sb.channel(key, { config: { broadcast: { self: false } } })
+    .on('broadcast', { event: 'typing' }, (msg) => {
+      if (msg.payload && msg.payload.from === chatPeer){
+        const el = $('#typing');
+        if (el) el.textContent = 'typing…';
+        clearTimeout(typingTimer);
+        typingTimer = setTimeout(() => { const e2 = $('#typing'); if (e2) e2.textContent = ''; }, 2500);
+      }
+    })
     .on('postgres_changes', { event:'INSERT', schema:'public', table:'messages' }, payload => {
       const m = payload.new;
       if (!m) return;
-      const pair = (m.sender_id===me.id && m.receiver_id===chatPeer) || (m.sender_id===chatPeer && m.receiver_id===me.id);
+      const pair = (m.sender_id === me.id && m.receiver_id === chatPeer) || (m.sender_id === chatPeer && m.receiver_id === me.id);
       if (pair && chatPeer) renderChat();
-    }).subscribe();
+    })
+    .on('postgres_changes', { event:'INSERT', schema:'public', table:'message_reactions' }, () => {
+      if (chatPeer) renderChat();
+    })
+    .subscribe();
 }
 function closeChatChannel(){ if (dmChannel){ sb.removeChannel(dmChannel); dmChannel = null; } }
 
@@ -978,39 +1397,75 @@ async function refreshBadges(){
   const nb = $('#notifBadge'), db = $('#dmBadge');
   if (nCount){ nb.textContent = fmt(nCount); nb.classList.remove('hidden'); } else nb.classList.add('hidden');
   if (mCount){ db.textContent = fmt(mCount); db.classList.remove('hidden'); } else db.classList.add('hidden');
+  const nbs = $('#notifBadgeSide'), dbs = $('#dmBadgeSide');
+  if (nbs){ if (nCount){ nbs.textContent = fmt(nCount); nbs.classList.remove('hidden'); } else nbs.classList.add('hidden'); }
+  if (dbs){ if (mCount){ dbs.textContent = fmt(mCount); dbs.classList.remove('hidden'); } else dbs.classList.add('hidden'); }
 }
 
 /* ============================== PROFILE =============================== */
 let profTab = 'posts';
+function emptyMsg(t){
+  return t === 'saved' ? 'No saved posts yet.' : t === 'reels' ? 'No reels yet.' :
+         t === 'tagged' ? 'No tagged posts yet.' : 'No posts yet. Tap + to share your first one.';
+}
 async function loadProfile(){
+  if (!me) return;
   paintAvatars();
   $('#profName').textContent = '@' + me.username;
   $('#profBio').innerHTML = `<span class="nm">${esc(me.name||'')}</span>\n${esc(me.bio||'')}`;
-  const [{ count: postsCount }, { data: fw }, { data: fwr }, gridQ] = await Promise.all([
-    sb.from('posts').select('*', { count:'exact', head:true }).eq('user_id', me.id),
-    sb.from('follows').select('following_id').eq('follower_id', me.id),
-    sb.from('follows').select('follower_id').eq('following_id', me.id),
-    profTab === 'saved'
-      ? sb.from('saves').select('post_id, post:posts(id,image_url,likes(user_id))').eq('user_id', me.id).order('created_at',{ascending:false})
-      : sb.from('posts').select('id,image_url,likes(user_id)').eq('user_id', me.id).order('created_at',{ascending:false})
+  const uid = me.id;
+  const uname = me.username;
+  const [{ count: postsCount }, { data: fw }, { data: fwr }] = await Promise.all([
+    sb.from('posts').select('*', { count:'exact', head:true }).eq('user_id', uid),
+    sb.from('follows').select('following_id').eq('follower_id', uid),
+    sb.from('follows').select('follower_id').eq('following_id', uid)
   ]);
   $('#statPosts').textContent = postsCount || 0;
   $('#statFollowers').textContent = fmt((fwr||[]).length);
   $('#statFollowing').textContent = fmt((fw||[]).length);
-  const items = profTab === 'saved'
-    ? (gridQ.data||[]).map(r => r.post).filter(Boolean)
-    : (gridQ.data||[]);
+
+  loadHighlights(uid);
+
+  let items = [];
+  if (profTab === 'saved'){
+    const { data } = await sb.from('saves')
+      .select('post_id, post:posts(id,image_url,post_media(url,media_type,position),likes(user_id))')
+      .eq('user_id', uid).order('created_at', { ascending: false });
+    items = (data||[]).map(r => r.post).filter(Boolean);
+  } else if (profTab === 'reels'){
+    const { data } = await sb.from('reels').select('id,video_url').eq('user_id', uid).order('created_at', { ascending: false });
+    items = (data||[]).map(r => ({ id: r.id, image_url: r.video_url, _reel: true }));
+  } else if (profTab === 'tagged'){
+    const { data } = await sb.from('posts')
+      .select('id,image_url,post_media(url,media_type,position),likes(user_id)')
+      .neq('user_id', uid).ilike('caption', '%@' + uname + '%')
+      .order('created_at', { ascending: false }).limit(60);
+    items = data || [];
+  } else {
+    const { data } = await sb.from('posts')
+      .select('id,image_url,post_media(url,media_type,position),likes(user_id)')
+      .eq('user_id', uid).order('created_at', { ascending: false });
+    items = data || [];
+  }
+
   const grid = $('#profGrid');
   if (!items.length){
-    grid.innerHTML = `<div class="empty" style="grid-column:1/-1">${profTab==='saved'?'No saved posts yet.':'No posts yet.'}</div>`;
+    grid.innerHTML = `<div class="empty" style="grid-column:1/-1">${emptyMsg(profTab)}</div>`;
     return;
   }
   grid.innerHTML = items.map(p => {
+    const first = (p.post_media || []).slice().sort((a,b) => a.position - b.position)[0] || { url: p.image_url, media_type: 'image' };
     const lc = (p.likes||[]).length;
-    return `<div class="cell" data-pid="${p.id}"><img src="${esc(p.image_url)}" loading="lazy" alt="">
-      <div class="ov"><span>♥ ${fmt(lc)}</span></div></div>`;
+    const isVid = first.media_type === 'video' || p._reel;
+    return `<div class="cell" data-pid="${p.id}" data-reel="${p._reel ? 1 : 0}">
+      ${isVid ? `<video src="${esc(first.url)}" muted playsinline></video>` : `<img src="${esc(first.url)}" loading="lazy" alt="">`}
+      ${isVid ? '<span style="position:absolute;top:8px;right:8px;color:#fff;font-size:13px;text-shadow:0 1px 4px #000">▶</span>' : ''}
+      <div class="ov">${isVid ? '<span>▶</span>' : `<span>♥ ${fmt(lc)}</span>`}</div></div>`;
   }).join('');
-  $$('#profGrid .cell').forEach(c => c.onclick = () => openComments(c.dataset.pid));
+  $$('#profGrid .cell').forEach(c => c.onclick = () => {
+    if (c.dataset.reel === '1') go('reels');
+    else openPost(c.dataset.pid);
+  });
 }
 $$('[data-ptab]').forEach(t => t.onclick = () => {
   profTab = t.dataset.ptab;
@@ -1053,21 +1508,7 @@ $('#logoutBtn').onclick = async () => {
 };
 
 /* ============================== SEARCH ================================ */
-$('#searchInput').addEventListener('keydown', async (e) => {
-  if (e.key !== 'Enter') return;
-  const q = e.target.value.trim(); if (!q) return;
-  const { data } = await sb.from('profiles').select('id,username,name,avatar_url')
-    .ilike('username', `%${q}%`).limit(20);
-  const rows = (data||[]).filter(p => p.id !== me.id);
-  if (!rows.length) return toast('No people found for "'+q+'"');
-  const body = $('#userModalBody');
-  $('#userModal').classList.add('on');
-  body.innerHTML = `<div class="muted" style="font-size:13px;margin-bottom:8px">Results for "${esc(q)}"</div>` +
-    rows.map(p => `<div class="person" data-uid="${p.id}" style="cursor:pointer">
-      ${avatarImg(p)}<div class="meta"><div class="h">${esc(p.username)}</div>
-      <div class="s">${esc(p.name||'')}</div></div></div>`).join('');
-  $$('#userModalBody .person').forEach(el => el.onclick = () => openUserModal(el.dataset.uid));
-});
+/* (search now lives in the Explore tab — see runSearch above) */
 
 /* ============================ NAVIGATION ============================== */
 let currentView = 'home';
@@ -1076,10 +1517,12 @@ function go(v){
   $$('.view').forEach(x => x.classList.remove('on'));
   $('#view-'+v).classList.add('on');
   $$('nav.bottom .ibtn[data-go]').forEach(b => b.classList.toggle('active', b.dataset.go === v));
+  $$('#sidebar .snav[data-go]').forEach(b => b.classList.toggle('active', b.dataset.go === v));
   window.scrollTo({ top:0, behavior:'smooth' });
   if (v === 'explore') loadExplore();
   if (v === 'profile') loadProfile();
   if (v === 'reels') loadReels();
+  if (v === 'settings') loadSettings();
   if (v === 'dms'){ loadDMs(); refreshBadges(); }
   if (v === 'notifs') loadNotifs();
   if (v !== 'dms'){ chatPeer = null; closeChatChannel(); }
@@ -1113,6 +1556,111 @@ function subscribeRealtime(){
     })
     .subscribe();
 }
+
+/* ============================= HIGHLIGHTS ============================= */
+let myHighlights = [];
+
+async function loadHighlights(uid){
+  const el = $('#highlightsRow');
+  if (!me || !el) return;
+  const user = uid || me.id;
+  const { data } = await sb.from('highlights')
+    .select('id,title,cover_url,created_at, highlight_items(id,media_url,media_type,caption,position)')
+    .eq('user_id', user).order('created_at', { ascending: false });
+  myHighlights = data || [];
+  let html = `<div class="hl new" id="hlNew"><div class="ring"><img src="${avatarOf(me)}" alt=""></div><small>New</small></div>`;
+  html += myHighlights.map(h => {
+    const items = (h.highlight_items || []).slice().sort((a,b) => a.position - b.position);
+    const cover = h.cover_url || (items[0] && items[0].media_url) || avatarOf(me);
+    return `<div class="hl" data-hl="${h.id}"><div class="ring"><img src="${esc(cover)}" alt=""></div><small>${esc(h.title)}</small></div>`;
+  }).join('');
+  el.innerHTML = html;
+  const n = $('#hlNew'); if (n) n.onclick = openHighlightComposer;
+  $$('#highlightsRow [data-hl]').forEach(x => x.onclick = () => openHighlight(x.dataset.hl));
+}
+
+function openHighlight(id){
+  const h = myHighlights.find(x => x.id === id); if (!h) return;
+  const items = (h.highlight_items || []).slice().sort((a,b) => a.position - b.position);
+  if (!items.length) return toast('This highlight is empty');
+  storyGroups = [{ profile: { ...me }, stories: items.map(i => ({
+    id: 'hl-' + i.id, media_url: i.media_url, media_type: i.media_type, caption: i.caption,
+    created_at: h.created_at, _hl: true
+  })) }];
+  openStoryViewer(0, 0);
+}
+
+function openHighlightComposer(){ errEl('#hlErr',''); $('#hlTitle').value = ''; $('#hlModal').classList.add('on'); }
+$('#hlSave').onclick = async () => {
+  errEl('#hlErr','');
+  const title = $('#hlTitle').value.trim();
+  if (!title) return errEl('#hlErr','Please give the highlight a name.');
+  const { data: mine } = await sb.from('stories').select('media_url,media_type,caption,created_at')
+    .eq('user_id', me.id).gt('expires_at', new Date().toISOString()).order('created_at', { ascending: true });
+  if (!mine || !mine.length) return errEl('#hlErr','Post a story first — highlights are built from your stories.');
+  const { data: h, error } = await sb.from('highlights')
+    .insert({ user_id: me.id, title, cover_url: mine[0].media_url }).select().single();
+  if (error) return errEl('#hlErr', error.message);
+  const items = mine.map((s, i) => ({ highlight_id: h.id, media_url: s.media_url, media_type: s.media_type, caption: s.caption, position: i }));
+  const { error: e2 } = await sb.from('highlight_items').insert(items);
+  if (e2) return errEl('#hlErr', e2.message);
+  closeAllModals(); await loadHighlights(); toast('Highlight created');
+};
+
+/* =============================== NOTES ================================ */
+let notesCache = [];
+
+async function loadNotes(){
+  const el = $('#notesBar'); if (!el || !me) return;
+  const { data } = await sb.from('notes')
+    .select('user_id,body,created_at,expires_at, author:profiles(username,name,avatar_url)')
+    .gt('expires_at', new Date().toISOString()).order('created_at', { ascending: false }).limit(30);
+  notesCache = data || [];
+  const mine = notesCache.find(n => n.user_id === me.id);
+  let html = `<div class="note mine" id="noteMine"><div class="bub2">${mine ? esc(mine.body) : '＋ Note'}</div><small>Your note</small></div>`;
+  html += notesCache.filter(n => n.user_id !== me.id).map(n => `<div class="note" data-uid="${n.user_id}">
+      <div class="bub2">${esc(n.body)}</div><small>${esc((n.author||{}).username || 'user')}</small></div>`).join('');
+  el.innerHTML = html;
+  const nm = $('#noteMine'); if (nm) nm.onclick = () => openNoteComposer(mine);
+  $$('#notesBar .note[data-uid]').forEach(x => x.onclick = () => openUserModal(x.dataset.uid));
+}
+
+function openNoteComposer(mine){
+  errEl('#noteErr','');
+  $('#noteInput').value = mine ? mine.body : '';
+  $('#noteModal').classList.add('on');
+}
+$('#noteSave').onclick = async () => {
+  errEl('#noteErr','');
+  const body = $('#noteInput').value.trim();
+  if (!body){
+    await sb.from('notes').delete().eq('user_id', me.id);
+    closeAllModals(); await loadNotes(); toast('Note removed'); return;
+  }
+  const now = new Date();
+  const { error } = await sb.from('notes').upsert({
+    user_id: me.id, body, created_at: now.toISOString(), expires_at: new Date(now.getTime() + 86400e3).toISOString()
+  });
+  if (error) return errEl('#noteErr', error.message);
+  closeAllModals(); await loadNotes(); toast('Note shared');
+};
+$('#newNoteBtn').onclick = () => openNoteComposer(notesCache.find(n => n.user_id === me.id));
+
+/* ============================== SETTINGS ============================== */
+async function loadSettings(){
+  if (!me) return;
+  $('#setAccount').textContent = '@' + me.username + (me.name ? ' · ' + me.name : '');
+  $('#setBackend').textContent = (CFG.SUPABASE_URL || '').replace('https://', '') || 'not configured';
+  const [{ count: pc }, { data: fwr }] = await Promise.all([
+    sb.from('posts').select('*', { count:'exact', head:true }).eq('user_id', me.id),
+    sb.from('follows').select('follower_id').eq('following_id', me.id)
+  ]);
+  $('#setStats').textContent = `${pc || 0} posts · ${fmt((fwr||[]).length)} followers`;
+}
+$('#themeBtn2').onclick = toggleTheme;
+$('#logoutBtn2').onclick = () => { const b = $('#logoutBtn'); if (b) b.click(); };
+$('#editFromSettings').onclick = () => { const b = $('#editBioBtn'); if (b) b.click(); };
+$('#newBtnSide').onclick = () => openCreate();
 
 /* ============================== ICONS ================================= */
 function svgHeart(f){ return `<svg width="24" height="24" viewBox="0 0 24 24" fill="${f?'currentColor':'none'}" stroke="currentColor" stroke-width="1.9"><path d="M12 21s-7.5-4.7-9.6-9.2C.9 8.4 2.7 5 6.2 5c2 0 3.3 1.1 4 2.2.6-1.1 2-2.2 4-2.2 3.5 0 5.3 3.4 3.8 6.8C19.5 16.3 12 21 12 21Z"/></svg>`; }
