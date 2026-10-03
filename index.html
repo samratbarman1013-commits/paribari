@@ -19,16 +19,15 @@
     <div class="card-panel">
       <p style="margin:0 0 6px;font-weight:600">This app needs a Supabase project.</p>
       <p class="muted" style="font-size:13.5px;line-height:1.6;margin:0 0 14px">
-        Once you paste your <b>Project URL</b> and <b>anon public key</b> into
-        <code>config.js</code>, everything below turns on: real sign-up, real
-        posts shared between people, photos, likes, comments, follows, chat
-        and notifications.
+        Once you paste your <b>Project URL</b> and <b>publishable key</b> into
+        <code>config.js</code>, everything below turns on: real sign-up, posts,
+        stories, reels, chat and notifications.
       </p>
       <ol class="muted" style="font-size:13.5px;line-height:1.7;padding-left:18px;margin:0">
         <li>Create a free project at <b>supabase.com</b></li>
-        <li>Open <b>SQL Editor</b> and run <code>supabase-schema.sql</code></li>
-        <li>Go to <b>Settings → API</b> and copy the two keys</li>
-        <li>Paste them into <code>config.js</code> and reload</li>
+        <li>Run <code>supabase-schema.sql</code>, then <code>supabase-upgrade.sql</code>, then <code>supabase-v2.sql</code></li>
+        <li>Go to <b>Settings → API Keys</b> and copy the publishable key</li>
+        <li>Paste it into <code>config.js</code> and reload</li>
       </ol>
     </div>
   </div>
@@ -44,13 +43,11 @@
         <button id="tabIn" class="on">Sign in</button>
         <button id="tabUp">Create account</button>
       </div>
-
       <form id="formIn">
         <div class="field"><label>EMAIL</label><input id="inEmail" type="email" autocomplete="email" required></div>
         <div class="field"><label>PASSWORD</label><input id="inPass" type="password" autocomplete="current-password" required></div>
         <button class="btn primary block" style="margin-top:18px" type="submit">Sign in</button>
       </form>
-
       <form id="formUp" class="hidden">
         <div class="field"><label>FULL NAME</label><input id="upName" autocomplete="name" required></div>
         <div class="field"><label>USERNAME</label><input id="upUser" placeholder="e.g. samrat" required></div>
@@ -58,7 +55,6 @@
         <div class="field"><label>PASSWORD</label><input id="upPass" type="password" autocomplete="new-password" minlength="6" required></div>
         <button class="btn primary block" style="margin-top:18px" type="submit">Create account</button>
       </form>
-
       <div class="err" id="authErr"></div>
       <div class="ok" id="authOk"></div>
     </div>
@@ -67,86 +63,142 @@
 
 <!-- ===================== APP ===================== -->
 <div id="app" class="hidden">
-  <header>
-    <div class="hwrap">
-      <div class="logo">PariBari</div>
-      <div class="search"><input id="searchInput" placeholder="Search people" /></div>
-      <div class="spacer"></div>
-      <div class="icons">
-        <button class="ibtn" id="themeBtn" title="Toggle theme">
-          <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
-        </button>
-        <button class="ibtn" id="newBtnTop" title="Create post">
-          <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M12 8v8M8 12h8"/></svg>
-        </button>
-        <button class="ibtn" data-go="dms" title="Messages">
-          <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7Z"/></svg>
-          <span class="badge hidden" id="dmBadge">0</span>
-        </button>
-        <button class="ibtn" data-go="notifs" title="Notifications">
-          <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 21s-7.5-4.7-9.6-9.2C.9 8.4 2.7 5 6.2 5c2 0 3.3 1.1 4 2.2.6-1.1 2-2.2 4-2.2 3.5 0 5.3 3.4 3.8 6.8C19.5 16.3 12 21 12 21Z"/></svg>
-          <span class="badge hidden" id="notifBadge">0</span>
-        </button>
-        <button class="ibtn" data-go="profile" title="Profile"><img id="topAvatar" alt=""></button>
-      </div>
-    </div>
-  </header>
 
-  <main>
-    <section class="view on" id="view-home">
-      <div class="feedcol">
-        <div class="stories" id="stories"></div>
-        <div id="feed"></div>
-      </div>
-    </section>
+  <!-- desktop left rail -->
+  <aside id="sidebar">
+    <div class="logo">PariBari</div>
+    <nav class="side-nav">
+      <button class="snav" data-go="home"><span class="ic">⌂</span><span>Home</span></button>
+      <button class="snav" data-go="explore"><span class="ic">⌕</span><span>Search</span></button>
+      <button class="snav" data-go="explore"><span class="ic">◎</span><span>Explore</span></button>
+      <button class="snav" data-go="reels"><span class="ic">▶</span><span>Reels</span></button>
+      <button class="snav" data-go="dms"><span class="ic">✈</span><span>Messages</span><em class="sbadge hidden" id="dmBadgeSide">0</em></button>
+      <button class="snav" data-go="notifs"><span class="ic">♡</span><span>Notifications</span><em class="sbadge hidden" id="notifBadgeSide">0</em></button>
+      <button class="snav" id="newBtnSide"><span class="ic">＋</span><span>Create</span></button>
+      <button class="snav" data-go="profile"><span class="ic"><img id="sideAvatar" alt=""></span><span>Profile</span></button>
+    </nav>
+    <button class="snav settings-link" data-go="settings"><span class="ic">⚙</span><span>Settings</span></button>
+  </aside>
 
-    <section class="view" id="view-explore">
-      <div id="followSuggest"></div>
-      <div class="grid" id="exploreGrid"></div>
-    </section>
-
-    <section class="view" id="view-reels">
-      <div class="reels-top"><b>Reels</b><button class="btn" id="newReelBtn">New reel</button></div>
-      <div id="reelsFeed"></div>
-    </section>
-
-    <section class="view" id="view-dms">
-      <div id="dmList"></div>
-      <div id="dmChat" class="hidden"></div>
-    </section>
-
-    <section class="view" id="view-notifs"><div id="notifList"></div></section>
-
-    <section class="view" id="view-profile">
-      <div class="prof">
-        <div class="pic"><img id="profPic" alt=""></div>
-        <div class="pinfo">
-          <h2 id="profName"></h2>
-          <div class="stats">
-            <div><b id="statPosts">0</b> posts</div>
-            <div data-follow="followers" style="cursor:pointer"><b id="statFollowers">0</b> followers</div>
-            <div data-follow="following" style="cursor:pointer"><b id="statFollowing">0</b> following</div>
-          </div>
-          <div class="bio" id="profBio"></div>
-          <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
-            <button class="btn" id="editBioBtn">Edit profile</button>
-            <button class="btn" id="logoutBtn">Sign out</button>
-          </div>
+  <div class="appmain">
+    <!-- mobile top bar -->
+    <header>
+      <div class="hwrap">
+        <div class="logo">PariBari</div>
+        <div class="spacer"></div>
+        <div class="icons">
+          <button class="ibtn" data-go="settings" title="Settings">
+            <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
+          </button>
+          <button class="ibtn" data-go="dms" title="Messages">
+            <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7Z"/></svg>
+            <span class="badge hidden" id="dmBadge">0</span>
+          </button>
+          <button class="ibtn" data-go="notifs" title="Notifications">
+            <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 21s-7.5-4.7-9.6-9.2C.9 8.4 2.7 5 6.2 5c2 0 3.3 1.1 4 2.2.6-1.1 2-2.2 4-2.2 3.5 0 5.3 3.4 3.8 6.8C19.5 16.3 12 21 12 21Z"/></svg>
+            <span class="badge hidden" id="notifBadge">0</span>
+          </button>
         </div>
       </div>
-      <div class="tabs">
-        <div class="tab on" data-ptab="posts">Posts</div>
-        <div class="tab" data-ptab="saved">Saved</div>
-      </div>
-      <div class="grid" id="profGrid"></div>
-    </section>
-  </main>
+    </header>
 
+    <main>
+      <!-- HOME -->
+      <section class="view on" id="view-home">
+        <div class="feedcol">
+          <div class="notes" id="notesBar"></div>
+          <div class="stories" id="stories"></div>
+          <div id="feed"></div>
+        </div>
+        <aside class="rail">
+          <div id="railSuggest"></div>
+          <div class="rail-foot">© 2026 PariBari · a Supabase-backed social app</div>
+        </aside>
+      </section>
+
+      <!-- EXPLORE / SEARCH -->
+      <section class="view" id="view-explore">
+        <div class="searchbox">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+          <input id="exploreSearch" placeholder="Search people, #hashtags" />
+        </div>
+        <div class="tabsline searchtabs" id="searchTabs">
+          <button class="on" data-stab="top">Top</button>
+          <button data-stab="people">People</button>
+          <button data-stab="tags">Tags</button>
+        </div>
+        <div id="followSuggest"></div>
+        <div id="searchResults"></div>
+        <div class="grid" id="exploreGrid"></div>
+      </section>
+
+      <!-- REELS -->
+      <section class="view" id="view-reels">
+        <div class="reels-top"><b>Reels</b><button class="btn" id="newReelBtn">New reel</button></div>
+        <div id="reelsFeed"></div>
+      </section>
+
+      <!-- MESSAGES -->
+      <section class="view" id="view-dms">
+        <div id="dmList"></div>
+        <div id="dmChat" class="hidden"></div>
+      </section>
+
+      <!-- NOTIFICATIONS -->
+      <section class="view" id="view-notifs"><div id="notifList"></div></section>
+
+      <!-- PROFILE -->
+      <section class="view" id="view-profile">
+        <div class="prof">
+          <div class="pic"><img id="profPic" alt=""></div>
+          <div class="pinfo">
+            <div class="prof-top">
+              <h2 id="profName"></h2>
+              <button class="btn" id="editBioBtn">Edit profile</button>
+              <button class="btn" id="logoutBtn">Sign out</button>
+            </div>
+            <div class="stats">
+              <div><b id="statPosts">0</b> posts</div>
+              <div data-follow="followers" style="cursor:pointer"><b id="statFollowers">0</b> followers</div>
+              <div data-follow="following" style="cursor:pointer"><b id="statFollowing">0</b> following</div>
+            </div>
+            <div class="bio" id="profBio"></div>
+          </div>
+        </div>
+        <div class="highlights" id="highlightsRow"></div>
+        <div class="tabs">
+          <div class="tab on" data-ptab="posts">Posts</div>
+          <div class="tab" data-ptab="reels">Reels</div>
+          <div class="tab" data-ptab="tagged">Tagged</div>
+          <div class="tab" data-ptab="saved">Saved</div>
+        </div>
+        <div class="grid" id="profGrid"></div>
+      </section>
+
+      <!-- SETTINGS -->
+      <section class="view" id="view-settings">
+        <div class="setwrap">
+          <h2>Settings</h2>
+          <div class="setrow"><div><b>Dark mode</b><div class="muted">Easier on the eyes at night</div></div><button class="btn" id="themeBtn2">Toggle</button></div>
+          <div class="setrow"><div><b>Account</b><div class="muted" id="setAccount"></div></div><button class="btn" id="editFromSettings">Edit profile</button></div>
+          <div class="setrow"><div><b>Your activity</b><div class="muted" id="setStats"></div></div><button class="btn" id="newNoteBtn">Share a note</button></div>
+          <div class="setrow"><div><b>Backend</b><div class="muted" id="setBackend"></div></div></div>
+          <div class="setrow"><div><b>Sign out</b><div class="muted">Log out of PariBari on this device</div></div><button class="btn" id="logoutBtn2">Sign out</button></div>
+          <p class="muted" style="font-size:12.5px;margin-top:18px">
+            PariBari v2 — feed, stories, reels, notes, highlights, chat and notifications.
+            Live video, shopping and AI features are not included.
+          </p>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- mobile bottom tabs -->
   <nav class="bottom">
     <button class="ibtn active" data-go="home" title="Home">
       <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>
     </button>
-    <button class="ibtn" data-go="explore" title="Explore">
+    <button class="ibtn" data-go="explore" title="Search">
       <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
     </button>
     <button class="ibtn" id="newBtnNav" title="Create">
@@ -161,16 +213,50 @@
   <button class="install hidden" id="installBtn">Install PariBari app</button>
 </div>
 
+<!-- ===================== POST DETAIL ===================== -->
+<div id="postView" class="hidden">
+  <button class="pv-close" id="pvClose">&times;</button>
+  <div class="pv-card">
+    <div class="pv-media" id="pvMedia"></div>
+    <div class="pv-side">
+      <div class="pv-head" id="pvHead"></div>
+      <div class="pv-comments" id="pvComments"></div>
+      <div class="pv-actions" id="pvActions"></div>
+      <div class="cbar pv-add">
+        <input id="pvInput" placeholder="Add a comment...">
+        <button id="pvPost">Post</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== STORY VIEWER ===================== -->
+<div id="storyViewer" class="hidden">
+  <div class="sv-bars" id="svBars"></div>
+  <div class="sv-head">
+    <img id="svAvatar" alt="">
+    <div><div class="sv-name" id="svName"></div><div class="sv-time" id="svTime"></div></div>
+    <button class="sv-close" id="svClose">&times;</button>
+  </div>
+  <div class="sv-stage" id="svStage"></div>
+  <div class="sv-caption" id="svCaption"></div>
+  <div class="sv-nav"><div class="sv-prev" id="svPrev"></div><div class="sv-next" id="svNext"></div></div>
+  <div class="sv-reply" id="svReplyBar">
+    <input id="svReply" placeholder="Send message">
+    <button id="svReplySend">Send</button>
+  </div>
+</div>
+
 <!-- ===================== MODALS ===================== -->
 <div class="modal" id="createModal">
   <div class="sheet">
     <h3>Create new post <button data-close="createModal">&times;</button></h3>
     <div class="body">
       <div class="row" style="gap:8px">
-        <button class="btn" id="pickFile" style="flex:1">Choose photo</button>
+        <button class="btn" id="pickFile" style="flex:1">Choose photos / video</button>
         <button class="btn" id="pickCam" style="flex:1">Use camera</button>
       </div>
-      <input type="file" id="fileInput" accept="image/*" hidden />
+      <input type="file" id="fileInput" accept="image/*,video/*" multiple hidden />
       <div id="camBox" class="hidden" style="margin-top:12px">
         <video id="cam" autoplay playsinline muted></video>
         <div class="row" style="margin-top:10px;gap:8px">
@@ -178,8 +264,8 @@
           <button class="btn" id="camCancel" style="flex:1">Cancel</button>
         </div>
       </div>
-      <div class="preview hidden" id="preview"><img id="previewImg" alt="preview"></div>
-      <div class="field"><label>CAPTION</label><textarea id="capInput" rows="3" placeholder="Write a caption..."></textarea></div>
+      <div class="preview hidden" id="preview"></div>
+      <div class="field"><label>CAPTION</label><textarea id="capInput" rows="3" placeholder="Write a caption...  #hashtags @mentions work"></textarea></div>
       <div class="field"><label>LOCATION</label><input id="locInput" placeholder="Add location"></div>
       <button class="btn primary block" id="shareBtn" style="margin-top:18px">Share</button>
       <div class="err" id="createErr"></div>
@@ -206,20 +292,19 @@
 </div>
 
 <div class="modal" id="cModal">
-  <div class="sheet" style="max-width:440px">
+  <div class="sheet" style="max-width:460px">
     <h3>Comments <button data-close="cModal">&times;</button></h3>
     <div class="body" id="cModalBody"></div>
   </div>
 </div>
 
 <div class="modal" id="userModal">
-  <div class="sheet" style="max-width:440px">
+  <div class="sheet" style="max-width:460px">
     <h3>Profile <button data-close="userModal">&times;</button></h3>
     <div class="body" id="userModalBody"></div>
   </div>
 </div>
 
-<!-- ===================== STORY COMPOSER ===================== -->
 <div class="modal" id="storyModal">
   <div class="sheet">
     <h3>Add to your story <button data-close="storyModal">&times;</button></h3>
@@ -234,7 +319,6 @@
   </div>
 </div>
 
-<!-- ===================== REEL COMPOSER ===================== -->
 <div class="modal" id="reelModal">
   <div class="sheet">
     <h3>New reel <button data-close="reelModal">&times;</button></h3>
@@ -248,25 +332,40 @@
   </div>
 </div>
 
-<!-- ===================== FOLLOWERS / FOLLOWING ===================== -->
 <div class="modal" id="followModal">
-  <div class="sheet" style="max-width:440px">
+  <div class="sheet" style="max-width:460px">
     <h3 id="followTitle">Followers <button data-close="followModal">&times;</button></h3>
     <div class="body" id="followBody"></div>
   </div>
 </div>
 
-<!-- ===================== STORY VIEWER ===================== -->
-<div id="storyViewer" class="hidden">
-  <div class="sv-bars" id="svBars"></div>
-  <div class="sv-head">
-    <img id="svAvatar" alt="">
-    <div><div class="sv-name" id="svName"></div><div class="sv-time" id="svTime"></div></div>
-    <button class="sv-close" id="svClose">&times;</button>
+<div class="modal" id="shareModal">
+  <div class="sheet" style="max-width:460px">
+    <h3>Share <button data-close="shareModal">&times;</button></h3>
+    <div class="body" id="shareBody"></div>
   </div>
-  <div class="sv-stage" id="svStage"></div>
-  <div class="sv-caption" id="svCaption"></div>
-  <div class="sv-nav"><div class="sv-prev" id="svPrev"></div><div class="sv-next" id="svNext"></div></div>
+</div>
+
+<div class="modal" id="noteModal">
+  <div class="sheet" style="max-width:460px">
+    <h3>Your note <button data-close="noteModal">&times;</button></h3>
+    <div class="body">
+      <div class="field"><label>NOTE (60 CHARACTERS, LASTS 24 HOURS)</label><input id="noteInput" maxlength="60" placeholder="Share what's on your mind..."></div>
+      <button class="btn primary block" id="noteSave" style="margin-top:16px">Share note</button>
+      <div class="err" id="noteErr"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="hlModal">
+  <div class="sheet" style="max-width:460px">
+    <h3>Add to highlight <button data-close="hlModal">&times;</button></h3>
+    <div class="body">
+      <div class="field"><label>HIGHLIGHT NAME</label><input id="hlTitle" placeholder="e.g. Travel"></div>
+      <button class="btn primary block" id="hlSave" style="margin-top:16px">Add</button>
+      <div class="err" id="hlErr"></div>
+    </div>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
