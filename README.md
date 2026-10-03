@@ -11,8 +11,11 @@ A real, multi-user Instagram-style social app — built with plain HTML/CSS/JS o
 - **Real posts** — photos uploaded from your device or camera, stored in Supabase Storage,
   shared between *all* users
 - **Likes, comments, saves** — persisted per user in Postgres
-- **Follow / unfollow** — with real follower & following counts
-- **Direct messages** — real-time chat, delivered live via Supabase Realtime
+- **Direct messages** — real-time chat with read receipts (✓ / ✓✓) and photo messages
+- **Stories** — 24-hour photo/video stories that expire, with a tap-through viewer
+- **Reels** — a vertical short-video feed with likes and comments
+- **Follow / unfollow** — with real follower & following counts and tappable lists
+- **Who to follow** — suggestions on the Explore tab
 - **Notifications** — likes, comments, follows and messages, with an unread badge
 - **Profiles** — editable name, username, bio and avatar upload
 - **Explore grid, search, dark mode**, and it installs as a PWA (offline shell)
@@ -28,6 +31,10 @@ Supabase project. Do this once:
 2. **Create the database** — in your project, open **SQL Editor → New query**, paste the
    entire contents of `supabase-schema.sql`, and click **Run**. This creates the tables,
    security policies, storage buckets and the trigger that makes a profile on sign-up.
+
+   Then do the same again with **`supabase-upgrade.sql`** (SQL Editor → New query → Run).
+   That adds Stories, Reels, read receipts and photo messages. If you skip it the app still
+   works — those four extras simply stay empty.
 
 3. **Turn off email confirmation (easiest for testing)** — go to
    **Authentication → Sign In / Providers → Email** and switch *Confirm email* **off**.
@@ -61,6 +68,7 @@ Supabase project. Do this once:
 | `config.js` | **Your Supabase URL + publishable key go here** |
 | `supabase.js` | Bundled Supabase client library (no CDN needed) |
 | `supabase-schema.sql` | Run once in the Supabase SQL Editor |
+| `supabase-upgrade.sql` | Run once after that — adds Stories, Reels, chat upgrades |
 | `sw.js` | Service worker (offline shell) |
 | `manifest.webmanifest`, `icon-*.png` | PWA install assets |
 
