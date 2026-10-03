@@ -6,6 +6,6 @@
    Row Level Security policies in supabase-schema.sql.
    ========================================================================= */
 window.PARIBARI_CONFIG = {
-  SUPABASE_URL: "https://swtxxkouiuwjeywzxqika.supabase.co",
+  SUPABASE_URL: "https://swtxkuoiuwjeywzxqjka.supabase.co",
   SUPABASE_ANON_KEY: "sb_publishable_gbxIxveUVVhPNj3WSlu2DQ_gYIr0kzp"
 };
